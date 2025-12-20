@@ -1,0 +1,19 @@
+# CMake build directories
+cmake-build-*/
+build/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Compiled executables
+BookNest
+
+# IDE - CLion
+.idea/
+.junie/guidelines.md
+
+# Application data files
+*.bin
