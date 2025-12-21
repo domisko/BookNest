@@ -1,5 +1,7 @@
 #include <iostream>
 #include <limits> // Für cin.ignore
+#include <sstream>
+#include <filesystem>
 #include "Library.h"
 #include "Utils.h"
 
@@ -11,9 +13,11 @@ static void drawMainMenu(bool showEmployeeMenu) {
     std::cout << "[1] Buecher\n";
     std::cout << "[2] Mitglieder\n";
     std::cout << "[3] Reports\n";
-    if (showEmployeeMenu) std::cout << "[4] Mitarbeiter (Admin)\n";
-    std::cout << "[0] Abmelden\n";
-    std::cout << "------------------------------------\n";
+    if (showEmployeeMenu) {
+        std::cout << "[4] Mitarbeiter (Admin)\n";
+        std::cout << "[5] Import (Admin)\n";
+    }
+    printMenuFooter("Abmelden");
 }
 
 template<typename F>
@@ -30,22 +34,27 @@ int main() {
     Library myLib;
     int choice = 0;
 
-    // Zum Start Daten laden
+    // Zum Start Daten laden – bevorzugt in ./data (für Docker-Volumes),
+    // dann Fallback ../data, anschließend klassisch ./ und ../
+    myLib.setDataFilePath("data/library.bin");
     bool loaded = myLib.loadData();
     if (!loaded) {
-        // Onboarding, wenn keine Daten vorhanden sind
-        runAction("Erstkonfiguration", [&]{
-            std::cout << "Es wurden keine bestehenden Daten gefunden.\n";
-            std::cout << "[1] Leer starten\n[2] Testdaten erzeugen\nAuswahl: ";
-            int oc = 0; std::cin >> oc;
-            if (oc == 2) {
-                myLib.generateDummyData();
-                std::cout << "Testdaten angelegt.";
-            } else {
-                std::cout << "Leerer Start gewaehlt.";
-            }
-        });
+        myLib.setDataFilePath("../data/library.bin");
+        loaded = myLib.loadData();
     }
+    if (!loaded) {
+        myLib.setDataFilePath("library.bin");
+        loaded = myLib.loadData();
+    }
+    if (!loaded) {
+        myLib.setDataFilePath("../library.bin");
+        loaded = myLib.loadData();
+        if (!loaded) {
+            // wieder auf Standard für späteres Speichern
+            myLib.setDataFilePath("data/library.bin");
+        }
+    }
+    // Kein Onboarding: Wenn nichts geladen wurde, starten wir leer weiter.
 
     // Login-Flow: bei erster Nutzung existiert Default-Admin (admin/admin)
     while (true) {
@@ -107,20 +116,44 @@ int main() {
                 while (!back) {
                     clearScreen();
                     std::cout << "--- Buecher ---\n"
-                              << "[1] Suchen\n[2] Ausleihen\n[3] Zurueckgeben\n[0] Zurueck\nAuswahl: ";
+                              << "[1] Suchen\n[2] Ausleihen\n[3] Zurueckgeben\n";
+                    printMenuFooter("Zurueck");
+                    std::cout << "Auswahl: ";
                     int bc=0; std::cin >> bc;
                     if (bc==1) {
-                        // Suchmaske und Ergebnisliste ohne Untermenü anzeigen
+                        // Bücher: Suche mit Paging (10er Schritte)
                         clearScreen();
                         std::cout << "--- Buecher: Suche ---\n";
                         std::cout << "Suchbegriff (Titel/ISBN/Autor): ";
                         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                         std::string query; std::getline(std::cin, query);
-                        clearScreen();
-                        std::cout << "--- Suchergebnisse ---\n";
-                        (void)myLib.searchBooks(query);
-                        std::cout << "\n[Enter] Zurueck";
-                        std::cin.get();
+                        auto matches = myLib.searchBooksIDs(query);
+                        size_t shown = 0;
+                        while (true) {
+                            clearScreen();
+                            std::cout << "--- Suchergebnisse (" << matches.size() << ") ---\n";
+                            size_t toShow = std::min<size_t>(10, matches.size() - shown);
+                            for (size_t i = 0; i < toShow; ++i) {
+                                int bid = matches[shown + i];
+                                const Book* b = nullptr; for (const auto& x : myLib.getBooks()) if (x.inventoryID==bid){ b=&x; break; }
+                                if (b) {
+                                    std::ostringstream oss; for (size_t k=0;k<b->authors.size();++k){ if(k) oss<<", "; oss<<b->authors[k]; }
+                                    std::cout << "[ID: " << b->inventoryID << "] " << b->title;
+                                    if (!b->authors.empty()) std::cout << " (" << oss.str() << ")";
+                                    std::cout << " - " << (b->isAvailable?"Verfuegbar":"AUSGELIEHEN") << "\n";
+                                }
+                            }
+                            shown += toShow;
+                            if (shown >= matches.size()) {
+                                std::cout << "\n[Enter] Zurueck";
+                                std::cin.get();
+                                break;
+                            } else {
+                                std::cout << "\n[m] Mehr anzeigen  |  [Enter] Zurueck: ";
+                                std::string cmd; std::getline(std::cin, cmd);
+                                if (cmd != "m" && cmd != "M" && cmd != "+") break;
+                            }
+                        }
                     } else if (bc==2) {
                         int bookID, memberID;
                         clearScreen();
@@ -155,7 +188,9 @@ int main() {
                 while (!back) {
                     clearScreen();
                     std::cout << "--- Mitglieder ---\n"
-                              << "[1] Anlegen\n[2] Bearbeiten\n[3] Aktivieren/Deaktivieren\n[0] Zurueck\nAuswahl: ";
+                              << "[1] Anlegen\n[2] Bearbeiten\n[3] Aktivieren/Deaktivieren\n[4] Suchen (ID/Email/Name)\n";
+                    printMenuFooter("Zurueck");
+                    std::cout << "Auswahl: ";
                     int mc=0; std::cin >> mc;
                     if (mc==1) {
                         // Nur Formular + Ergebnis, kein Untermenü im Hintergrund
@@ -207,6 +242,39 @@ int main() {
                         std::cout << "\n[Enter] Zurueck";
                         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                         std::cin.get();
+                    } else if (mc==4) {
+                        // Mitglieder: Einheitliche Suche (ID exakt, Email/Name Teilstring), Paging 10er
+                        clearScreen();
+                        std::cout << "--- Mitglieder: Suche ---\n";
+                        std::cout << "Suchbegriff (ID/Email/Name): ";
+                        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                        std::string q; std::getline(std::cin, q);
+                        std::vector<int> ids = myLib.searchBorrowersIDs(q);
+                        size_t shown=0;
+                        while (true) {
+                            clearScreen();
+                            std::cout << "--- Treffer (" << ids.size() << ") ---\n";
+                            size_t toShow = std::min<size_t>(10, ids.size()-shown);
+                            for (size_t i=0;i<toShow;++i) {
+                                int mid = ids[shown+i];
+                                const Borrower* m=nullptr; for (const auto& b: myLib.getBorrowers()) if (b.memberID==mid){ m=&b; break; }
+                                if (m) {
+                                    std::cout << "[ID:" << m->memberID << "] " << m->name
+                                              << " | " << m->email << " | Status: "
+                                              << (m->status==BorrowerStatus::Active?"Active":"Blocked") << "\n";
+                                }
+                            }
+                            shown += toShow;
+                            if (shown >= ids.size()) {
+                                std::cout << "\n[Enter] Zurueck";
+                                std::cin.get();
+                                break;
+                            } else {
+                                std::cout << "\n[m] Mehr anzeigen  |  [Enter] Zurueck: ";
+                                std::string cmd; std::getline(std::cin, cmd);
+                                if (cmd != "m" && cmd != "M" && cmd != "+") break;
+                            }
+                        }
                     } else if (mc==0) {
                         back = true; // keine zusätzliche Enter-Pause hier
                     }
@@ -218,7 +286,9 @@ int main() {
                 while (!back) {
                     clearScreen();
                     std::cout << "--- Reports ---\n"
-                              << "[1] Tagesbericht (heute)\n[2] Tagesbericht (Datum eingeben)\n[3] Rueckgabeliste (Faelligkeiten)\n[0] Zurueck\nAuswahl: ";
+                              << "[1] Tagesbericht (heute)\n[2] Tagesbericht (Datum eingeben)\n[3] Rueckgabeliste (Faelligkeiten)\n";
+                    printMenuFooter("Zurueck");
+                    std::cout << "Auswahl: ";
                     int rc=0; std::cin >> rc;
                     if (rc==1) {
                         clearScreen();
@@ -286,7 +356,9 @@ int main() {
                     // da wir in einigen Fällen selbst eine Enter-Pause anzeigen.
                     clearScreen();
                     std::cout << "--- Mitarbeiter verwalten ---\n"
-                              << "[1] Liste\n[2] Anlegen\n[3] Deaktivieren\n[4] Reaktivieren\n[5] Passwort zuruecksetzen\n[0] Zurueck\nAuswahl: ";
+                              << "[1] Liste\n[2] Anlegen\n[3] Deaktivieren\n[4] Reaktivieren\n[5] Passwort zuruecksetzen\n";
+                    printMenuFooter("Zurueck");
+                    std::cout << "Auswahl: ";
                     int c=0; std::cin >> c;
                     if (c==1) {
                         // Spezielle Anzeige: Nur Liste + eigene Enter-Pause
@@ -352,6 +424,61 @@ int main() {
                          std::cout << "Zurueck zum Hauptmenue";
                         // kleine Pause optional vermeiden, damit schneller zurück
                     }
+                }
+                break;
+            }
+            case 5: { // Import (Admin) – eigener Menüpunkt im Hauptmenü
+                const Employee* user = myLib.getCurrentUser();
+                if (!user || user->role != Role::Admin) {
+                    runAction("Import", [&]{ std::cout << "Nur Admins duerfen importieren."; });
+                    break;
+                }
+                namespace fs = std::filesystem;
+                bool back = false;
+                while (!back) {
+                    clearScreen();
+                    std::cout << "--- Import (CSV) ---\n"
+                                 "[1] Buecher importieren (books.csv)\n"
+                                 "[2] Mitglieder importieren (members.csv)\n";
+                    printMenuFooter("Zurueck");
+                    std::cout << "Auswahl: ";
+                    int ic = 0; std::cin >> ic;
+                    if (ic == 0) { back = true; break; }
+
+                    // Import-Ordner bestimmen
+                    fs::path importDir = "./import";
+                    if (!fs::exists(importDir)) {
+                        if (fs::exists("../import")) importDir = "../import"; // Fallback
+                    }
+
+                    fs::path filePath;
+                    if (ic == 1) filePath = importDir / "books.csv";
+                    else if (ic == 2) filePath = importDir / "members.csv";
+                    else { continue; }
+
+                    clearScreen();
+                    std::cout << "--- Ergebnis: Import ---\n";
+                    if (!fs::exists(filePath)) {
+                        std::cout << "CSV nicht gefunden unter Pfad: " << filePath.string() << "\n";
+                        std::cout << "\n[Enter] Zurueck";
+                        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                        std::cin.get();
+                        continue;
+                    }
+
+                    bool ok=false;
+                    if (ic==1) ok = myLib.importBooksFromCSVFile(filePath.string());
+                    else if (ic==2) ok = myLib.importMembersFromCSVFile(filePath.string());
+
+                    if (ok) {
+                        myLib.saveData();
+                        std::cout << "Import erfolgreich aus '" << filePath.filename().string() << "'.";
+                    } else {
+                        std::cout << "Import fehlgeschlagen (Datei ungueltig?).";
+                    }
+                    std::cout << "\n[Enter] Zurueck";
+                    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                    std::cin.get();
                 }
                 break;
             }

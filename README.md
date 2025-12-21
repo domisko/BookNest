@@ -1,6 +1,6 @@
 # BookNest – Console Library Management System (C++17)
 
-BookNest ist ein textbasiertes Bibliotheksverwaltungssystem, das Lernziele aus OOP, Binär‑Persistenz, Datum/Fristen, Suche, Reporting und einfacher Rollenverwaltung (Admin/Mitarbeitende) vereint.
+BookNest ist ein textbasiertes Bibliotheksverwaltungssystem, das Lernziele aus OOP, Binär‑Persistenz, Datum/Fristen, Suche, Reporting, CSV‑Import und einfacher Rollenverwaltung (Admin/Mitarbeitende) vereint.
 
 ## Features
 - Medienmodell: `Book` mit Autorenliste, Publisher, Edition, Standort, Genre, Preis, `MediaType`, `maxLoanPeriodDays`, `createdAt`, `createdBy/lastModifiedBy`.
@@ -8,9 +8,10 @@ BookNest ist ein textbasiertes Bibliotheksverwaltungssystem, das Lernziele aus O
 - Mitglieder (Borrower): Name, Email, Adresse, `registrationDate`, `status` (Active/Blocked).
 - Historie: `Loan` speichert Ausleihe, Fälligkeit und Rückgabe – inkl. `performedBy` (Mitarbeiter:in, die die Aktion durchgeführt hat).
 - Mitarbeiterverwaltung: Rollen `Admin`/`Staff`, Login/Logout, Anlegen/Deaktivieren/Reaktivieren, Passwort zurücksetzen (Demo‑Hash).
-- Suche: Nach Titel, ISBN oder Autor(en).
+- Suche: Bücher (Titel/ISBN/Autor) und Mitglieder (ID/Email/Name) – beide mit paginierter Ausgabe (10er‑Schritte, „m/+“ für mehr).
 - Reporting: Tagesbericht (Ausleihen/Rückgaben, sortiert, inkl. Summen pro `MediaType`), Fälligkeitsliste („Due Report“).
-- Persistenz: Eine Binärdatei `library.bin` mit versioniertem Header und klaren Sektionen.
+- CSV‑Import: Bücher und Mitglieder per `import/books.csv` bzw. `import/members.csv`.
+- Persistenz & Autosave: Binärdatei `library.bin` (Version 5). Nach jeder mutierenden Aktion wird automatisch gespeichert.
 - UI: Reines Konsolenmenü mit „angeheftetem“ Bildschirm (Clear‑Screen zwischen Aktionen).
 
 ## Build & Tests (CLion / CMake)
@@ -26,20 +27,20 @@ BookNest ist ein textbasiertes Bibliotheksverwaltungssystem, das Lernziele aus O
 
 ## Erste Schritte
 1) App starten → Login: Standard‑Admin `admin`/`admin`.
-2) Optional unter „Mitarbeiter verwalten“ weitere Konten anlegen.
-3) Testdaten erzeugen über Menüpunkt `[8]`, danach Suche/Ausleihe/Rückgabe/Reports ausprobieren.
+2) Optional unter „Mitarbeiter (Admin)“ weitere Konten anlegen.
+3) Import: Als Admin im Hauptmenü `[5] Import (Admin)` wählen und `books.csv`/`members.csv` aus `import/` importieren.
+4) Danach Suche/Ausleihe/Rückgabe/Reports ausprobieren.
 
-## Menüüberblick
-- [1] Buch suchen (Titel/ISBN/Autor)
-- [2] Buch ausleihen (Buch‑ID + Mitglieds‑ID)
-- [3] Buch zurückgeben (Buch‑ID)
-- [4] Alle Bücher anzeigen
-- [5] Alle Mitglieder anzeigen (Status sichtbar)
-- [6] Mitarbeiter verwalten (nur Admin)
-- [7] Abmelden
-- [8] Testdaten generieren
-- [9] Beenden (Speichern)
-- [10] Reports (Tagesbericht, Fälligkeitsliste)
+## Menüüberblick (vereinfacht)
+- Hauptmenü:
+  - [1] Buecher
+  - [2] Mitglieder
+  - [3] Reports
+  - [4] Mitarbeiter (Admin)
+  - [5] Import (Admin)
+  - [0] Abmelden
+  
+  In allen Menüs wird eine einheitliche Fußzeile mit `[0] Zurueck` bzw. `[0] Abmelden` angezeigt.
 
 Hinweis: In manchen IDE‑Run‑Konsolen bleibt der Scroll‑Verlauf sichtbar. Für eine „saubere“ angeheftete Darstellung bitte das System‑Terminal (macOS Terminal, iTerm2, Windows Terminal) nutzen.
 
@@ -48,6 +49,29 @@ Hinweis: In manchen IDE‑Run‑Konsolen bleibt der Scroll‑Verlauf sichtbar. F
 - Borrower: `status == Active` ist Voraussetzung für Ausleihe. `registrationDate` wird bei Anlage gesetzt.
 - Loan: Enthält `loanDate`, `dueDate`, `returnDate` (0 = offen) und `performedBy`.
 - Employee: `Role::Admin` vs. `Role::Staff`. Nur Admins verwalten Mitarbeiter.
+
+## CSV‑Import – Schemas
+Ort der Dateien (Standard): `import/books.csv` und `import/members.csv` (im Projektroot). Fallback: `../import/...`.
+
+### Bücher (`books.csv`)
+- Pflicht: `ISBN`; `Title`
+- Optional: `Authors` (Trennung per `|`), `Publisher`, `Edition`, `Location`, `Genre`, `Price`, `MaxLoanDays`, `MediaType` (`Book/Buch`, `Magazine/Magazin/Zeitschrift`, `DVD`, `EBook/E-Book/E_Buch`, `Other/Sonstiges`), `CreatedBy`
+
+Beispiel:
+```
+ISBN;Title;Authors;Publisher;Edition;Location;Genre;Price;MaxLoanDays;MediaType;CreatedBy
+978-3-16-148410-0;Clean Code;Robert C. Martin;Prentice Hall;;REG-A12;Programming;39.90;14;Book;domi
+```
+
+### Mitglieder (`members.csv`)
+- Pflicht: `Name`; `Email`; `Address`
+- Optional (derzeit ignoriert): `RegistrationDate` (`YYYY-MM-DD`), `Status` (`Active/Blocked`)
+
+Beispiel:
+```
+Name;Email;Address
+Max Mustermann;max@test.de;Musterweg 1
+```
 
 ## Reporting
 - Tagesbericht (`Library::showDailyReport`):
@@ -76,6 +100,37 @@ Alle Strings/Vektoren werden mit Längenfeld vorangeschrieben, wie in `Utils::wr
 
 ## Tests
 - Catch2‑basierte Unit‑Tests decken u. a. ab: Ausleihe/Rückgabe‑Flow, Fälligkeitsberechnung, Suche, Persistenz‑Roundtrip, Mitarbeiter‑Auth/RBAC, `performedBy`.
+
+## Docker
+Mit Docker kannst du BookNest schnell testen – inklusive persistenter Daten und CSV‑Import per Volume.
+
+### Voraussetzungen
+- Docker und optional Docker Compose v2
+
+### Image bauen
+```
+docker build -t booknest:latest .
+```
+
+### Starten via Docker Compose (empfohlen)
+```
+mkdir -p data import
+docker compose up --build
+```
+Dies startet die App interaktiv. Volumes:
+- `./data` → `/app/data` (enthält `library.bin`)
+- `./import` → `/app/import` (lege hier `books.csv`/`members.csv` ab)
+
+Im Programm als Admin anmelden (`admin/admin`) → Hauptmenü `[5] Import (Admin)`.
+
+### Direktstart ohne Compose
+```
+mkdir -p data import
+docker run --rm -it \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/import:/app/import" \
+  --name booknest booknest:latest
+```
 
 ## Anwender‑Doku
 - Siehe `docs/UserGuide.md` für einen Schritt‑für‑Schritt‑Leitfaden.

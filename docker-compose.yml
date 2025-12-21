@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  booknest:
+    build: .
+    image: booknest:latest
+    container_name: booknest
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./data:/app/data
+      - ./import:/app/import
+    # Environment variables can be added here if needed later
+    # environment:
+    #   - TZ=Europe/Berlin

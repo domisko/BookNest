@@ -5,6 +5,8 @@
 #include <sstream>
 #include <iomanip>
 #include <map>
+#include <filesystem>
+#include <cctype>
 
 // Optional: Hilfsfunktionen intern
 static const Employee* findEmployeeByUsername(const std::vector<Employee>& list, const std::string& uname) {
@@ -42,12 +44,16 @@ int Library::addBook(const std::string& isbn,
     int assignedId = nextBookID++;
     books.emplace_back(assignedId, isbn, title, authors, publisher, location, edition, genre,
                        price, mediaType, maxLoanPeriodDays, createdAt, actor, actorMod, isAvailable);
+    // Autosave nach erfolgreichem Hinzufügen
+    saveData();
     return assignedId;
 }
 
     int Library::addMember(const std::string& name, const std::string& email, const std::string& address) {
     int assignedId = nextMemberID++;
     borrowers.emplace_back(assignedId, name, email, address);
+    // Autosave nach erfolgreichem Hinzufügen
+    saveData();
     return assignedId;
 }
 
@@ -95,6 +101,77 @@ Book* Library::findBookByID(const int id) {
         return matches;
     }
 
+    // Reine ID-Suche ohne Konsolen-Ausgabe (für Paging im UI)
+    std::vector<int> Library::searchBooksIDs(const std::string& query) const {
+        std::vector<int> ids;
+        if (query.empty()) return ids;
+        auto containsIC = [](const std::string& hay, const std::string& needle){
+            if (needle.empty()) return true;
+            std::string H, N; H.reserve(hay.size()); N.reserve(needle.size());
+            for (char c: hay) H.push_back((char)std::tolower((unsigned char)c));
+            for (char c: needle) N.push_back((char)std::tolower((unsigned char)c));
+            return H.find(N) != std::string::npos;
+        };
+        for (const auto& book : books) {
+            bool authorHit = false;
+            for (const auto& a : book.authors) { if (containsIC(a, query)) { authorHit = true; break; } }
+            if (containsIC(book.title, query) || containsIC(book.isbn, query) || authorHit) {
+                ids.push_back(book.inventoryID);
+            }
+        }
+        return ids;
+    }
+
+    // Mitgliedersuche per E-Mail (Teilstring, case-insensitive) → Member-IDs
+    std::vector<int> Library::searchBorrowersByEmail(const std::string& query) const {
+        std::vector<int> ids;
+        if (query.empty()) return ids;
+        std::string q; q.reserve(query.size()); for (char c: query) q.push_back((char)std::tolower((unsigned char)c));
+        for (const auto& m : borrowers) {
+            std::string e; e.reserve(m.email.size()); for (char c: m.email) e.push_back((char)std::tolower((unsigned char)c));
+            if (e.find(q) != std::string::npos) ids.push_back(m.memberID);
+        }
+        return ids;
+    }
+
+    // Mitgliedersuche per Name (Teilstring, case-insensitive) → Member-IDs
+    std::vector<int> Library::searchBorrowersByName(const std::string& query) const {
+        std::vector<int> ids;
+        if (query.empty()) return ids;
+        std::string q; q.reserve(query.size()); for (char c: query) q.push_back((char)std::tolower((unsigned char)c));
+        for (const auto& m : borrowers) {
+            std::string n; n.reserve(m.name.size()); for (char c: m.name) n.push_back((char)std::tolower((unsigned char)c));
+            if (n.find(q) != std::string::npos) ids.push_back(m.memberID);
+        }
+        return ids;
+    }
+
+    // Vereinheitlichte Mitgliedersuche: ID (exakt, wenn numerisch) oder Teilstring über E‑Mail/Name (case-insensitive)
+    std::vector<int> Library::searchBorrowersIDs(const std::string& query) const {
+        std::vector<int> ids;
+        if (query.empty()) return ids;
+        // Prüfen, ob rein numerisch (optional führende/leerende Spaces ignorieren)
+        auto isDigits = [](const std::string& s){
+            if (s.empty()) return false;
+            for (char c : s) if (!std::isdigit((unsigned char)c)) return false;
+            return true;
+        };
+        if (isDigits(query)) {
+            int wanted = 0;
+            try { wanted = std::stoi(query); } catch(...) { wanted = -1; }
+            for (const auto& m : borrowers) if (m.memberID == wanted) { ids.push_back(m.memberID); break; }
+            return ids;
+        }
+        // ansonsten: E-Mail oder Name enthält query (case-insensitive)
+        std::string q; q.reserve(query.size()); for (char c: query) q.push_back((char)std::tolower((unsigned char)c));
+        for (const auto& m : borrowers) {
+            std::string e; e.reserve(m.email.size()); for (char c: m.email) e.push_back((char)std::tolower((unsigned char)c));
+            std::string n; n.reserve(m.name.size());  for (char c: m.name)  n.push_back((char)std::tolower((unsigned char)c));
+            if (e.find(q) != std::string::npos || n.find(q) != std::string::npos) ids.push_back(m.memberID);
+        }
+        return ids;
+    }
+
     // Hilfsmethode: Alle Bücher anzeigen
     void Library::printAllBooks() const {
         std::cout << "\n--- Buchbestand (" << books.size() << ") ---\n";
@@ -126,6 +203,8 @@ Book* Library::findBookByID(const int id) {
                 if (!name.empty()) m.name = name;
                 if (!email.empty()) m.email = email;
                 if (!address.empty()) m.address = address;
+                // Autosave nach erfolgreichem Update
+                saveData();
                 return true;
             }
         }
@@ -136,6 +215,8 @@ Book* Library::findBookByID(const int id) {
         for (auto& m : borrowers) {
             if (m.memberID == memberID) {
                 m.status = status;
+                // Autosave nach erfolgreichem Update
+                saveData();
                 return true;
             }
         }
@@ -189,8 +270,10 @@ Book* Library::findBookByID(const int id) {
         Loan& newLoan = loans.back();
         std::cout << "Erfolg: '" << book->title << "' wurde an " << borrower->name
                   << " verliehen. Faellig am: " << dateToString(newLoan.dueDate) << "\n";
-        return true;
-    }
+            // Autosave nach erfolgreichem Ausleihen
+            saveData();
+            return true;
+        }
 
     // --- Rückgabe-Logik ---
 
@@ -223,6 +306,8 @@ Book* Library::findBookByID(const int id) {
                 }
                 std::cout << "Erfolg: Buch '" << book->title << "' wurde zurueckgegeben.\n";
             }
+            // Autosave nach erfolgreicher Rückgabe
+            saveData();
             return true;
         }
         std::cout << "Fehler: Dieses Buch ist aktuell gar nicht ausgeliehen.\n";
@@ -565,6 +650,8 @@ int Library::addEmployee(const std::string& username,
     }
     int id = nextEmployeeID++;
     employees.emplace_back(id, username, fullName, simpleHash(rawPassword), role, std::time(nullptr), true);
+    // Autosave nach erfolgreichem Anlegen
+    saveData();
     return id;
 }
 
@@ -572,7 +659,7 @@ bool Library::deactivateEmployee(int employeeID) {
     const Employee* current = getCurrentUser();
     if (!current || current->role != Role::Admin) { std::cout << "Fehler: Admin-Recht erforderlich.\n"; return false; }
     for (auto& e : employees) {
-        if (e.employeeID == employeeID) { e.isActive = false; return true; }
+        if (e.employeeID == employeeID) { e.isActive = false; saveData(); return true; }
     }
     return false;
 }
@@ -581,7 +668,7 @@ bool Library::reactivateEmployee(int employeeID) {
     const Employee* current = getCurrentUser();
     if (!current || current->role != Role::Admin) { std::cout << "Fehler: Admin-Recht erforderlich.\n"; return false; }
     for (auto& e : employees) {
-        if (e.employeeID == employeeID) { e.isActive = true; return true; }
+        if (e.employeeID == employeeID) { e.isActive = true; saveData(); return true; }
     }
     return false;
 }
@@ -590,7 +677,7 @@ bool Library::resetEmployeePassword(int employeeID, const std::string& rawPasswo
     const Employee* current = getCurrentUser();
     if (!current || current->role != Role::Admin) { std::cout << "Fehler: Admin-Recht erforderlich.\n"; return false; }
     for (auto& e : employees) {
-        if (e.employeeID == employeeID) { e.passwordHash = simpleHash(rawPassword); return true; }
+        if (e.employeeID == employeeID) { e.passwordHash = simpleHash(rawPassword); saveData(); return true; }
     }
     return false;
 }
@@ -640,4 +727,146 @@ const Employee* Library::getCurrentUser() const {
     addMember("John Doe", "john@doe.com", "Unknown Road 42");
 
     std::cout << "Daten generiert.\n";
+}
+
+// -------------------- CSV-Import --------------------
+
+namespace {
+    static inline std::string trim(const std::string& s) {
+        size_t b = 0, e = s.size();
+        while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
+        while (e > b && std::isspace(static_cast<unsigned char>(s[e-1]))) --e;
+        return s.substr(b, e - b);
+    }
+
+    static std::vector<std::string> splitSimple(const std::string& line, char delim) {
+        std::vector<std::string> out; std::string cur; std::istringstream iss(line);
+        while (std::getline(iss, cur, delim)) out.push_back(cur);
+        // Entferne CR am Feldende (Windows-Zeilenenden)
+        for (auto& f : out) { if (!f.empty() && f.back()=='\r') f.pop_back(); f = trim(f); }
+        return out;
+    }
+
+    static std::vector<std::string> splitAuthors(const std::string& field) {
+        std::vector<std::string> v = splitSimple(field, '|');
+        for (auto& s : v) s = trim(s);
+        if (v.size()==1 && v[0].empty()) v.clear();
+        return v;
+    }
+
+    static MediaType parseMedia(const std::string& s) {
+        std::string t; t.reserve(s.size());
+        for (char c : s) t.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        if (t=="book" || t=="buch") return MediaType::Book;
+        if (t=="magazine" || t=="magazin" || t=="zeitschrift") return MediaType::Magazine;
+        if (t=="dvd") return MediaType::DVD;
+        if (t=="ebook" || t=="e-book" || t=="e_buch") return MediaType::EBook;
+        if (t=="other" || t=="sonstiges") return MediaType::Other;
+        return MediaType::Book;
+    }
+}
+
+bool Library::importBooksFromCSV(const std::string& directoryPath) {
+    namespace fs = std::filesystem;
+    fs::path dir(directoryPath);
+    fs::path file = dir / "books.csv";
+    return importBooksFromCSVFile(file.string());
+}
+
+bool Library::importBooksFromCSVFile(const std::string& filePath) {
+    std::ifstream in(filePath);
+    if (!in) { std::cout << "Import: Datei '" << filePath << "' nicht gefunden.\n"; return false; }
+
+    std::string header; if (!std::getline(in, header)) { std::cout << "Import: Leere books.csv.\n"; return false; }
+    // Erwartete Spalten (mindestens):
+    // ISBN;Title;Authors;Publisher;Edition;Location;Genre;Price;MaxLoanDays;MediaType;CreatedBy
+    // Nicht jede ist Pflicht: Pflicht sind ISBN, Title. Der Rest optional.
+    const auto h = splitSimple(header, ';');
+    auto col = [&](const std::string& name)->int{
+        for (size_t i=0;i<h.size();++i){ std::string x=h[i]; for(char& c: x) c= (char)std::tolower((unsigned char)c); if (x==name) return (int)i; }
+        return -1;
+    };
+    int ci_isbn = col("isbn");
+    int ci_title = col("title");
+    if (ci_isbn==-1 || ci_title==-1) {
+        std::cout << "Import: Header muss mindestens ISBN und Title enthalten.\n"; return false;
+    }
+    int ci_authors = col("authors");
+    int ci_publisher = col("publisher");
+    int ci_edition = col("edition");
+    int ci_location = col("location");
+    int ci_genre = col("genre");
+    int ci_price = col("price");
+    int ci_maxloan = col("maxloandays");
+    int ci_media = col("mediatype");
+    int ci_createdby = col("createdby");
+
+    size_t imported = 0, skipped = 0; std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+        auto f = splitSimple(line, ';');
+        auto get = [&](int idx)->std::string{ return (idx>=0 && (size_t)idx<f.size()) ? f[(size_t)idx] : std::string(); };
+        std::string isbn = get(ci_isbn);
+        std::string title = get(ci_title);
+        if (isbn.empty() || title.empty()) { ++skipped; continue; }
+        std::vector<std::string> authors = splitAuthors(get(ci_authors));
+        std::string publisher = get(ci_publisher);
+        std::string edition = get(ci_edition);
+        std::string location = get(ci_location);
+        std::string genre = get(ci_genre);
+        double price = 0.0; if (ci_price>=0) { try { price = std::stod(get(ci_price)); } catch(...){} }
+        int maxLoanDays = 14; if (ci_maxloan>=0) { try { maxLoanDays = std::stoi(get(ci_maxloan)); } catch(...){} }
+        MediaType mt = MediaType::Book; if (ci_media>=0) mt = parseMedia(get(ci_media));
+        std::string createdBy = get(ci_createdby); if (createdBy.empty()) createdBy = "import";
+
+        addBook(isbn, title, authors, publisher, location, edition, genre, price, mt, maxLoanDays, std::time(nullptr), createdBy, createdBy, true);
+        ++imported;
+    }
+
+    std::cout << "Import Buecher: " << imported << " importiert, " << skipped << " uebersprungen.\n";
+    return imported>0;
+}
+
+bool Library::importMembersFromCSV(const std::string& directoryPath) {
+    namespace fs = std::filesystem;
+    fs::path dir(directoryPath);
+    fs::path file = dir / "members.csv";
+    return importMembersFromCSVFile(file.string());
+}
+
+bool Library::importMembersFromCSVFile(const std::string& filePath) {
+    std::ifstream in(filePath);
+    if (!in) { std::cout << "Import: Datei '" << filePath << "' nicht gefunden.\n"; return false; }
+
+    std::string header; if (!std::getline(in, header)) { std::cout << "Import: Leere members.csv.\n"; return false; }
+    // Erwartete Spalten (mindestens): Name;Email;Address
+    // Optional: RegistrationDate(YYYY-MM-DD);Status(Active|Blocked)
+    const auto h = splitSimple(header, ';');
+    auto col = [&](const std::string& name)->int{
+        for (size_t i=0;i<h.size();++i){ std::string x=h[i]; for(char& c: x) c= (char)std::tolower((unsigned char)c); if (x==name) return (int)i; }
+        return -1;
+    };
+    int ci_name = col("name");
+    int ci_email = col("email");
+    int ci_address = col("address");
+    int ci_reg = col("registrationdate");
+    int ci_status = col("status");
+    if (ci_name==-1 || ci_email==-1 || ci_address==-1) { std::cout << "Import: Header members.csv unvollstaendig.\n"; return false; }
+
+    size_t imported = 0, skipped = 0; std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+        auto f = splitSimple(line, ';');
+        auto get = [&](int idx)->std::string{ return (idx>=0 && (size_t)idx<f.size()) ? f[(size_t)idx] : std::string(); };
+        std::string name = get(ci_name);
+        std::string email = get(ci_email);
+        std::string address = get(ci_address);
+        if (name.empty() || email.empty()) { ++skipped; continue; }
+
+        // Einfacher Weg: Wir nutzen die bestehende addMember-API und lassen RegistrationDate/Status auf Defaults.
+        addMember(name, email, address);
+        ++imported;
+    }
+    std::cout << "Import Mitglieder: " << imported << " importiert, " << skipped << " uebersprungen.\n";
+    return imported>0;
 }

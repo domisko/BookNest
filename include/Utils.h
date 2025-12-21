@@ -17,3 +17,6 @@ std::string simpleHash(const std::string& input);
 
 // Kleine Eingabe-Pause nur mit Enter (ohne zusätzliches Clear o. ä.)
 void pauseForEnter();
+
+// Einheitliche Menü-Fußzeile für Abmelden/Zurück mit Abstand und Trenner
+void printMenuFooter(const std::string& zeroLabel = "Abmelden");

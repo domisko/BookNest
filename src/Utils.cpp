@@ -27,8 +27,8 @@ time_t addDays(const time_t startTime, int days) {
 
 std::string dateToString(const time_t t) {
     char buf[20];
-    // Ausgabeformat auf TT-MM-YYYY umgestellt (deutsches Datumsformat)
-    std::strftime(buf, sizeof(buf), "%d-%m-%Y", std::localtime(&t));
+    // ISO-Format YYYY-MM-DD (entspricht Erwartung der Tests und ist sortierbar)
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d", std::localtime(&t));
     return {buf};
 }
 
@@ -86,4 +86,9 @@ void pauseForEnter() {
     std::cout << "\nDruecken Sie Enter um fortzufahren...";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     std::cin.get();
+}
+
+void printMenuFooter(const std::string& zeroLabel) {
+    std::cout << "\n[0] " << zeroLabel << "\n";
+    std::cout << "------------------------------------\n";
 }

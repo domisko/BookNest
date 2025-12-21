@@ -27,6 +27,12 @@ private:
 
 public:
     Library() = default;
+    // Import-Funktionen (CSV)
+    bool importBooksFromCSV(const std::string& directoryPath);
+    bool importMembersFromCSV(const std::string& directoryPath);
+    // Datei-basierte Import-Funktionen (für Bulk-Import mit Dateiauswahl)
+    bool importBooksFromCSVFile(const std::string& filePath);
+    bool importMembersFromCSVFile(const std::string& filePath);
     // Fügt ein Buch hinzu (vollständige Parameter) und gibt die vergebene Inventar-ID zurück
     int addBook(const std::string& isbn,
                 const std::string& title,
@@ -55,6 +61,14 @@ public:
 
     // Sucht nach Büchern und gibt die gefundenen Inventar-IDs zurück (zus. Konsolen-Output für die App)
     [[nodiscard]] std::vector<int> searchBooks(const std::string& query) const;
+    // Reine ID-Suche ohne Konsolen-Ausgabe (für Paging im UI)
+    [[nodiscard]] std::vector<int> searchBooksIDs(const std::string& query) const;
+
+    // Mitgliedersuche (IDs zurück)
+    // Vereinheitlichte Suche: ID (exakt, wenn numerisch) ODER E-Mail/Name (Teilstring, case-insensitive)
+    [[nodiscard]] std::vector<int> searchBorrowersIDs(const std::string& query) const;
+    [[nodiscard]] std::vector<int> searchBorrowersByEmail(const std::string& query) const;
+    [[nodiscard]] std::vector<int> searchBorrowersByName(const std::string& query) const;
     void printAllBooks() const;
     void printAllMembers() const;
 
