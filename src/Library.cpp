@@ -31,7 +31,8 @@ int Library::addBook(const std::string& isbn,
                      std::time_t createdAt,
                      const std::string& createdBy,
                      const std::string& lastModifiedBy,
-                     bool isAvailable) {
+                     bool isAvailable,
+                     bool doSave) {
     // Stempelung mit aktuellem User (falls eingeloggt)
     std::string actor = createdBy;
     if (currentUserID != -1) {
@@ -44,16 +45,16 @@ int Library::addBook(const std::string& isbn,
     int assignedId = nextBookID++;
     books.emplace_back(assignedId, isbn, title, authors, publisher, location, edition, genre,
                        price, mediaType, maxLoanPeriodDays, createdAt, actor, actorMod, isAvailable);
-    // Autosave nach erfolgreichem Hinzufügen
-    saveData();
+    // Autosave nach erfolgreichem Hinzufügen (optional unterdrückbar, z. B. für Bulk-Import)
+    if (doSave) saveData();
     return assignedId;
 }
 
-    int Library::addMember(const std::string& name, const std::string& email, const std::string& address) {
+    int Library::addMember(const std::string& name, const std::string& email, const std::string& address, bool doSave) {
     int assignedId = nextMemberID++;
     borrowers.emplace_back(assignedId, name, email, address);
-    // Autosave nach erfolgreichem Hinzufügen
-    saveData();
+    // Autosave nach erfolgreichem Hinzufügen (optional unterdrückbar, z. B. für Bulk-Import)
+    if (doSave) saveData();
     return assignedId;
 }
 
@@ -305,6 +306,15 @@ Book* Library::findBookByID(const int id) {
                     for (const auto& e : employees) if (e.employeeID == currentUserID) { book->lastModifiedBy = e.username; break; }
                 }
                 std::cout << "Erfolg: Buch '" << book->title << "' wurde zurueckgegeben.\n";
+                // Verspätung prüfen und Hinweis ausgeben
+                if (it->returnDate > it->dueDate) {
+                    long long diff = static_cast<long long>(it->returnDate) - static_cast<long long>(it->dueDate);
+                    // Auf volle Tage aufrunden: jede angefangene 24h zählt als 1 Tag
+                    long long daysLate = (diff + (24LL*60*60 - 1)) / (24LL*60*60);
+                    if (daysLate < 1) daysLate = 1; // defensiv
+                    std::cout << "Hinweis: Rueckgabe VERSPAETET um " << daysLate << " Tag(e). Faellig war: "
+                              << dateToString(it->dueDate) << "\n";
+                }
             }
             // Autosave nach erfolgreicher Rückgabe
             saveData();
@@ -359,8 +369,14 @@ Book* Library::findBookByID(const int id) {
             std::cout << "  [" << std::put_time(std::localtime(&l->returnDate), "%H:%M") << "] ";
             std::cout << (b? b->title : "Buch#"+std::to_string(l->bookInventoryID))
                       << " <- " << (m? m->name : ("Mitglied#"+std::to_string(l->borrowerID)))
-                      << " | durch: " << (l->performedBy.empty()?"n/a":l->performedBy)
-                      << "\n";
+                      << " | durch: " << (l->performedBy.empty()?"n/a":l->performedBy);
+            if (l->returnDate > l->dueDate) {
+                long long diff = static_cast<long long>(l->returnDate) - static_cast<long long>(l->dueDate);
+                long long daysLate = (diff + (24LL*60*60 - 1)) / (24LL*60*60);
+                if (daysLate < 1) daysLate = 1;
+                std::cout << " | VERSPAETET: " << daysLate << " Tag(e)";
+            }
+            std::cout << "\n";
         }
 
         // Summen/Statistiken pro MediaType
@@ -409,6 +425,7 @@ Book* Library::findBookByID(const int id) {
 
     // --- PERSISTENZ: Speichern ---
     bool Library::saveData() {
+        auto t0 = std::chrono::steady_clock::now();
         std::ofstream out(dataFilePath, std::ios::binary);
         if (!out) {
             std::cerr << "Fehler: Konnte Datei nicht zum Speichern oeffnen!\n";
@@ -501,12 +518,20 @@ Book* Library::findBookByID(const int id) {
         out.write(reinterpret_cast<char *>(&nextEmployeeID), sizeof(nextEmployeeID));
 
         std::cout << "Daten erfolgreich in '" << dataFilePath << "' gespeichert.\n";
+        if (isBenchmarkEnabled()) {
+            auto t1 = std::chrono::steady_clock::now();
+            double ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t1 - t0).count();
+            std::cout.setf(std::ios::fixed); std::cout.precision(1);
+            std::cout << "(Speichern in " << ms << " ms)\n";
+            std::cout.unsetf(std::ios::floatfield);
+        }
         out.close();
         return true;
     }
 
     // --- PERSISTENZ: Laden ---
     bool Library::loadData() {
+        auto t0 = std::chrono::steady_clock::now();
         std::ifstream in(dataFilePath, std::ios::binary);
         if (!in) {
             std::cout << "Keine gespeicherten Daten gefunden in '" << dataFilePath << "'. Starte leer.\n";
@@ -629,6 +654,13 @@ Book* Library::findBookByID(const int id) {
 
         std::cout << "Daten erfolgreich aus '" << dataFilePath << "' geladen (" << books.size() << " Buecher).\n";
         in.close();
+        if (isBenchmarkEnabled()) {
+            auto t1 = std::chrono::steady_clock::now();
+            double ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t1 - t0).count();
+            std::cout.setf(std::ios::fixed); std::cout.precision(1);
+            std::cout << "(Laden in " << ms << " ms)\n";
+            std::cout.unsetf(std::ios::floatfield);
+        }
         return true;
     }
 
@@ -732,6 +764,13 @@ const Employee* Library::getCurrentUser() const {
 // -------------------- CSV-Import --------------------
 
 namespace {
+    // Entfernt eine evtl. UTF-8 BOM (0xEF 0xBB 0xBF) am Anfang
+    static inline void stripBOM(std::string& s) {
+        if (s.size() >= 3 && (unsigned char)s[0] == 0xEF && (unsigned char)s[1] == 0xBB && (unsigned char)s[2] == 0xBF) {
+            s.erase(0, 3);
+        }
+    }
+
     static inline std::string trim(const std::string& s) {
         size_t b = 0, e = s.size();
         while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
@@ -745,6 +784,16 @@ namespace {
         // Entferne CR am Feldende (Windows-Zeilenenden)
         for (auto& f : out) { if (!f.empty() && f.back()=='\r') f.pop_back(); f = trim(f); }
         return out;
+    }
+
+    // Erkenne Trennzeichen: bevorzugt ';', ansonsten ','
+    static inline char detectDelimiter(const std::string& headerLine) {
+        size_t sc = 0, cc = 0;
+        for (char c : headerLine) {
+            if (c == ';') ++sc; else if (c == ',') ++cc;
+        }
+        if (sc == 0 && cc == 0) return ';';
+        return (sc >= cc) ? ';' : ',';
     }
 
     static std::vector<std::string> splitAuthors(const std::string& field) {
@@ -778,18 +827,27 @@ bool Library::importBooksFromCSVFile(const std::string& filePath) {
     if (!in) { std::cout << "Import: Datei '" << filePath << "' nicht gefunden.\n"; return false; }
 
     std::string header; if (!std::getline(in, header)) { std::cout << "Import: Leere books.csv.\n"; return false; }
+    stripBOM(header);
+    char delim = detectDelimiter(header);
     // Erwartete Spalten (mindestens):
     // ISBN;Title;Authors;Publisher;Edition;Location;Genre;Price;MaxLoanDays;MediaType;CreatedBy
     // Nicht jede ist Pflicht: Pflicht sind ISBN, Title. Der Rest optional.
-    const auto h = splitSimple(header, ';');
+    const auto h = splitSimple(header, delim);
+    auto norm = [](std::string s){ for(char& c: s) c=(char)std::tolower((unsigned char)c); return trim(s); };
     auto col = [&](const std::string& name)->int{
-        for (size_t i=0;i<h.size();++i){ std::string x=h[i]; for(char& c: x) c= (char)std::tolower((unsigned char)c); if (x==name) return (int)i; }
+        std::string want = norm(name);
+        for (size_t i=0;i<h.size();++i){ std::string x=norm(h[i]); if (x==want) return (int)i; }
         return -1;
     };
     int ci_isbn = col("isbn");
     int ci_title = col("title");
     if (ci_isbn==-1 || ci_title==-1) {
-        std::cout << "Import: Header muss mindestens ISBN und Title enthalten.\n"; return false;
+        std::ostringstream oss;
+        oss << "Import: Header muss mindestens ISBN und Title enthalten. Gefunden: ";
+        for (size_t i=0;i<h.size();++i){ if (i) oss << ", "; oss << h[i]; }
+        oss << "\n";
+        std::cout << oss.str();
+        return false;
     }
     int ci_authors = col("authors");
     int ci_publisher = col("publisher");
@@ -804,7 +862,7 @@ bool Library::importBooksFromCSVFile(const std::string& filePath) {
     size_t imported = 0, skipped = 0; std::string line;
     while (std::getline(in, line)) {
         if (line.empty()) continue;
-        auto f = splitSimple(line, ';');
+        auto f = splitSimple(line, delim);
         auto get = [&](int idx)->std::string{ return (idx>=0 && (size_t)idx<f.size()) ? f[(size_t)idx] : std::string(); };
         std::string isbn = get(ci_isbn);
         std::string title = get(ci_title);
@@ -819,7 +877,9 @@ bool Library::importBooksFromCSVFile(const std::string& filePath) {
         MediaType mt = MediaType::Book; if (ci_media>=0) mt = parseMedia(get(ci_media));
         std::string createdBy = get(ci_createdby); if (createdBy.empty()) createdBy = "import";
 
-        addBook(isbn, title, authors, publisher, location, edition, genre, price, mt, maxLoanDays, std::time(nullptr), createdBy, createdBy, true);
+        // Beim Bulk-Import kein Autosave pro Datensatz
+        addBook(isbn, title, authors, publisher, location, edition, genre, price, mt, maxLoanDays,
+                std::time(nullptr), createdBy, createdBy, true, /*doSave*/ false);
         ++imported;
     }
 
@@ -839,11 +899,15 @@ bool Library::importMembersFromCSVFile(const std::string& filePath) {
     if (!in) { std::cout << "Import: Datei '" << filePath << "' nicht gefunden.\n"; return false; }
 
     std::string header; if (!std::getline(in, header)) { std::cout << "Import: Leere members.csv.\n"; return false; }
+    stripBOM(header);
+    char delim = detectDelimiter(header);
     // Erwartete Spalten (mindestens): Name;Email;Address
     // Optional: RegistrationDate(YYYY-MM-DD);Status(Active|Blocked)
-    const auto h = splitSimple(header, ';');
+    const auto h = splitSimple(header, delim);
+    auto norm = [](std::string s){ for(char& c: s) c=(char)std::tolower((unsigned char)c); return trim(s); };
     auto col = [&](const std::string& name)->int{
-        for (size_t i=0;i<h.size();++i){ std::string x=h[i]; for(char& c: x) c= (char)std::tolower((unsigned char)c); if (x==name) return (int)i; }
+        std::string want = norm(name);
+        for (size_t i=0;i<h.size();++i){ std::string x=norm(h[i]); if (x==want) return (int)i; }
         return -1;
     };
     int ci_name = col("name");
@@ -851,20 +915,61 @@ bool Library::importMembersFromCSVFile(const std::string& filePath) {
     int ci_address = col("address");
     int ci_reg = col("registrationdate");
     int ci_status = col("status");
-    if (ci_name==-1 || ci_email==-1 || ci_address==-1) { std::cout << "Import: Header members.csv unvollstaendig.\n"; return false; }
+    if (ci_name==-1 || ci_email==-1 || ci_address==-1) {
+        std::ostringstream oss;
+        oss << "Import: Header members.csv unvollstaendig. Gefunden: ";
+        for (size_t i=0;i<h.size();++i){ if (i) oss << ", "; oss << h[i]; }
+        oss << "\n";
+        std::cout << oss.str();
+        return false;
+    }
 
     size_t imported = 0, skipped = 0; std::string line;
     while (std::getline(in, line)) {
         if (line.empty()) continue;
-        auto f = splitSimple(line, ';');
+        auto f = splitSimple(line, delim);
         auto get = [&](int idx)->std::string{ return (idx>=0 && (size_t)idx<f.size()) ? f[(size_t)idx] : std::string(); };
         std::string name = get(ci_name);
         std::string email = get(ci_email);
         std::string address = get(ci_address);
         if (name.empty() || email.empty()) { ++skipped; continue; }
 
-        // Einfacher Weg: Wir nutzen die bestehende addMember-API und lassen RegistrationDate/Status auf Defaults.
-        addMember(name, email, address);
+        // Bulk-Import: ohne Autosave pro Zeile
+        int newId = addMember(name, email, address, /*doSave*/ false);
+
+        // Optionale Felder setzen, falls vorhanden und gültig
+        // RegistrationDate (YYYY-MM-DD)
+        if (ci_reg >= 0) {
+            std::string ds = get(ci_reg);
+            if (!ds.empty()) {
+                // Erwartetes Format YYYY-MM-DD
+                if (ds.size() >= 10) {
+                    try {
+                        std::tm t{}; t.tm_isdst = -1;
+                        t.tm_year = std::stoi(ds.substr(0,4)) - 1900;
+                        t.tm_mon  = std::stoi(ds.substr(5,2)) - 1;
+                        t.tm_mday = std::stoi(ds.substr(8,2));
+                        std::time_t tt = std::mktime(&t);
+                        if (tt != -1) {
+                            if (Borrower* m = findBorrowerByID(newId)) m->registrationDate = tt;
+                        }
+                    } catch (...) {
+                        // Ignoriere ungültige Werte – Defaults bleiben erhalten
+                    }
+                }
+            }
+        }
+        // Status (Active/Blocked)
+        if (ci_status >= 0) {
+            std::string st = get(ci_status);
+            if (!st.empty()) {
+                std::string tl; tl.reserve(st.size());
+                for (char c : st) tl.push_back((char)std::tolower((unsigned char)c));
+                BorrowerStatus val = BorrowerStatus::Active;
+                if (tl == "blocked" || tl == "gesperrt" || tl == "inactive" || tl == "inaktiv") val = BorrowerStatus::Blocked;
+                if (Borrower* m = findBorrowerByID(newId)) m->status = val;
+            }
+        }
         ++imported;
     }
     std::cout << "Import Mitglieder: " << imported << " importiert, " << skipped << " uebersprungen.\n";

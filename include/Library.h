@@ -47,9 +47,10 @@ public:
                 std::time_t createdAt = std::time(nullptr),
                 const std::string& createdBy = "system",
                 const std::string& lastModifiedBy = "system",
-                bool isAvailable = true);
+                bool isAvailable = true,
+                bool doSave = true);
     // Fügt ein Mitglied hinzu und gibt die vergebene Member-ID zurück
-    int addMember(const std::string& name, const std::string& email, const std::string& address);
+    int addMember(const std::string& name, const std::string& email, const std::string& address, bool doSave = true);
 
     Book* findBookByID(int id);
     Borrower* findBorrowerByID(int id);

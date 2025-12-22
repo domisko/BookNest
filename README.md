@@ -13,6 +13,7 @@ BookNest ist ein textbasiertes Bibliotheksverwaltungssystem, das Lernziele aus O
 - CSV‑Import: Bücher und Mitglieder per `import/books.csv` bzw. `import/members.csv`.
 - Persistenz & Autosave: Binärdatei `library.bin` (Version 5). Nach jeder mutierenden Aktion wird automatisch gespeichert.
 - UI: Reines Konsolenmenü mit „angeheftetem“ Bildschirm (Clear‑Screen zwischen Aktionen).
+- Benchmark‑Modus: Optionaler UI‑Timer, der nach Aktionen die Dauer anzeigt (in ms). Umschaltbar im Menü „Einstellungen“.
 
 ## Build & Tests (CLion / CMake)
 - Profile: Debug (lokale Toolchain). Targets: `BookNest` (App), `unit_tests` (Catch2‑basierte Tests).
@@ -65,7 +66,9 @@ ISBN;Title;Authors;Publisher;Edition;Location;Genre;Price;MaxLoanDays;MediaType;
 
 ### Mitglieder (`members.csv`)
 - Pflicht: `Name`; `Email`; `Address`
-- Optional (derzeit ignoriert): `RegistrationDate` (`YYYY-MM-DD`), `Status` (`Active/Blocked`)
+- Optional: `RegistrationDate` (`YYYY-MM-DD`), `Status` (`Active/Blocked`)
+  - Fehlen diese Felder, werden sie automatisch gesetzt (Registrierungsdatum = jetzt, Status = Active).
+  - Ungültige Werte werden ignoriert; die Default‑Werte bleiben bestehen.
 
 Beispiel:
 ```
@@ -132,8 +135,18 @@ docker run --rm -it \
   --name booknest booknest:latest
 ```
 
+## Benchmark‑Modus
+- Aktivierung: Hauptmenü → `[6] Einstellungen` → „Benchmark umschalten“. Status wird angezeigt (AN/AUS).
+- Ausgabeformat: Nach relevanten Aktionen erscheint eine Zeile wie `(Buecher-Suche in 12.3 ms)`.
+- Gemessen werden u. a.: Laden/Speichern, Buch-/Mitgliedersuche, Ausleihe/Rückgabe, Reports, CSV‑Import.
+
 ## Anwender‑Doku
 - Siehe `docs/UserGuide.md` für einen Schritt‑für‑Schritt‑Leitfaden.
 
 ## Lizenz / Hinweis
 Dieses Projekt ist Teil eines Studien‑Portfolios (DLBMINPAPCC01). Der Code dient Demonstrations‑ und Lernzwecken.
+
+## Skalierung & Systemgrenzen
+- Standardbetrieb nutzt lineare Suchen über Vektoren mit paginierter Ausgabe. In dieser Konfiguration sind 50k–100k Bücher und vergleichbar viele Mitglieder auf typischer Hardware gut nutzbar.
+- Für größere Datenbestände können optionale In‑Memory‑Indizes ergänzt werden (z. B. `unordered_map` für ID/ISBN/E‑Mail), wodurch exakte Lookups in O(1) erfolgen. Startzeit steigt dann einmalig durch den Indexaufbau (O(n)).
+- Speicher und I/O skalieren weitgehend linear mit der Anzahl Datensätze. Für belastbare Tests empfiehlt sich der Benchmark‑Modus (Einstellungen) sowie CSV‑Import großer Datenmengen.

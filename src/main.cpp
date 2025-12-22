@@ -17,6 +17,7 @@ static void drawMainMenu(bool showEmployeeMenu) {
         std::cout << "[4] Mitarbeiter (Admin)\n";
         std::cout << "[5] Import (Admin)\n";
     }
+    std::cout << "[6] Einstellungen\n";
     printMenuFooter("Abmelden");
 }
 
@@ -127,20 +128,63 @@ int main() {
                         std::cout << "Suchbegriff (Titel/ISBN/Autor): ";
                         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                         std::string query; std::getline(std::cin, query);
-                        auto matches = myLib.searchBooksIDs(query);
+                        // Zeitmessung manuell, damit der Wert die Clear-Screen-Phase überlebt
+                        auto t0_search = std::chrono::steady_clock::now();
+                        std::vector<int> matches = myLib.searchBooksIDs(query);
+                        double ms_search = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(std::chrono::steady_clock::now() - t0_search).count();
                         size_t shown = 0;
                         while (true) {
                             clearScreen();
-                            std::cout << "--- Suchergebnisse (" << matches.size() << ") ---\n";
+                            std::cout.setf(std::ios::fixed); std::cout.precision(1);
+                            std::cout << "--- Suchergebnisse (" << matches.size() << ")";
+                            if (isBenchmarkEnabled()) std::cout << " — " << ms_search << " ms";
+                            std::cout << " ---\n";
+                            std::cout.unsetf(std::ios::floatfield);
+
+                            // Tabellarische Ausgabe
+                            auto mtToStr = [](MediaType mt){
+                                switch (mt) {
+                                    case MediaType::Book: return std::string("Book");
+                                    case MediaType::Magazine: return std::string("Magazine");
+                                    case MediaType::DVD: return std::string("DVD");
+                                    case MediaType::EBook: return std::string("EBook");
+                                    default: return std::string("Other");
+                                }
+                            };
+                            const size_t W_ID=6, W_TITLE=30, W_AUTH=24, W_MT=10, W_AV=11, W_LOC=10, W_AB=12;
+                            std::cout << padOrEllipsize("ID", W_ID) << " "
+                                      << padOrEllipsize("Titel", W_TITLE) << " "
+                                      << padOrEllipsize("Autoren", W_AUTH) << " "
+                                      << padOrEllipsize("Medienart", W_MT) << " "
+                                      << padOrEllipsize("Verfuegbar", W_AV) << " "
+                                      << padOrEllipsize("Location", W_LOC) << " "
+                                      << padOrEllipsize("Verf. ab", W_AB) << "\n";
+                            std::cout << std::string(W_ID+1+W_TITLE+1+W_AUTH+1+W_MT+1+W_AV+1+W_LOC+1+W_AB, '-') << "\n";
+
                             size_t toShow = std::min<size_t>(10, matches.size() - shown);
                             for (size_t i = 0; i < toShow; ++i) {
                                 int bid = matches[shown + i];
                                 const Book* b = nullptr; for (const auto& x : myLib.getBooks()) if (x.inventoryID==bid){ b=&x; break; }
                                 if (b) {
                                     std::ostringstream oss; for (size_t k=0;k<b->authors.size();++k){ if(k) oss<<", "; oss<<b->authors[k]; }
-                                    std::cout << "[ID: " << b->inventoryID << "] " << b->title;
-                                    if (!b->authors.empty()) std::cout << " (" << oss.str() << ")";
-                                    std::cout << " - " << (b->isAvailable?"Verfuegbar":"AUSGELIEHEN") << "\n";
+                                    std::string avail = b->isAvailable ? "Ja" : "Nein";
+                                    std::string availFrom;
+                                    if (!b->isAvailable) {
+                                        // Offenen Loan suchen
+                                        for (const auto& l : myLib.getLoans()) {
+                                            if (l.bookInventoryID == b->inventoryID && l.returnDate == 0) {
+                                                availFrom = dateToString(l.dueDate);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    std::cout << padOrEllipsize(std::to_string(b->inventoryID), W_ID) << " "
+                                              << padOrEllipsize(b->title, W_TITLE) << " "
+                                              << padOrEllipsize(oss.str(), W_AUTH) << " "
+                                              << padOrEllipsize(mtToStr(b->mediaType), W_MT) << " "
+                                              << padOrEllipsize(avail, W_AV) << " "
+                                              << padOrEllipsize(b->location, W_LOC) << " "
+                                              << padOrEllipsize(availFrom, W_AB) << "\n";
                                 }
                             }
                             shown += toShow;
@@ -202,7 +246,11 @@ int main() {
                         std::cout << "Adresse: "; std::getline(std::cin, addr);
                         clearScreen();
                         std::cout << "--- Ergebnis ---\n";
-                        int id = myLib.addMember(name, email, addr);
+                        int id = -1;
+                        {
+                            ScopedTimer t("Mitglied anlegen");
+                            id = myLib.addMember(name, email, addr);
+                        }
                         std::cout << "Mitglied angelegt mit ID " << id << ".";
                         std::cout << "\n[Enter] Zurueck";
                         std::cin.get();
@@ -249,19 +297,40 @@ int main() {
                         std::cout << "Suchbegriff (ID/Email/Name): ";
                         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                         std::string q; std::getline(std::cin, q);
+                        auto t0_m = std::chrono::steady_clock::now();
                         std::vector<int> ids = myLib.searchBorrowersIDs(q);
+                        double ms_m = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(std::chrono::steady_clock::now() - t0_m).count();
                         size_t shown=0;
                         while (true) {
                             clearScreen();
-                            std::cout << "--- Treffer (" << ids.size() << ") ---\n";
+                            std::cout.setf(std::ios::fixed); std::cout.precision(1);
+                            std::cout << "--- Treffer (" << ids.size() << ")";
+                            if (isBenchmarkEnabled()) std::cout << " — " << ms_m << " ms";
+                            std::cout << " ---\n";
+                            std::cout.unsetf(std::ios::floatfield);
+
+                            const size_t W_ID=6, W_NAME=24, W_MAIL=28, W_STATUS=8, W_REG=12, W_OPEN=6;
+                            std::cout << padOrEllipsize("ID", W_ID) << " "
+                                      << padOrEllipsize("Name", W_NAME) << " "
+                                      << padOrEllipsize("Email", W_MAIL) << " "
+                                      << padOrEllipsize("Status", W_STATUS) << " "
+                                      << padOrEllipsize("Registriert", W_REG) << " "
+                                      << padOrEllipsize("Offen", W_OPEN) << "\n";
+                            std::cout << std::string(W_ID+1+W_NAME+1+W_MAIL+1+W_STATUS+1+W_REG+1+W_OPEN, '-') << "\n";
+
                             size_t toShow = std::min<size_t>(10, ids.size()-shown);
                             for (size_t i=0;i<toShow;++i) {
                                 int mid = ids[shown+i];
                                 const Borrower* m=nullptr; for (const auto& b: myLib.getBorrowers()) if (b.memberID==mid){ m=&b; break; }
                                 if (m) {
-                                    std::cout << "[ID:" << m->memberID << "] " << m->name
-                                              << " | " << m->email << " | Status: "
-                                              << (m->status==BorrowerStatus::Active?"Active":"Blocked") << "\n";
+                                    // Offene Ausleihen zählen
+                                    int open = 0; for (const auto& l : myLib.getLoans()) if (l.borrowerID==m->memberID && l.returnDate==0) ++open;
+                                    std::cout << padOrEllipsize(std::to_string(m->memberID), W_ID) << " "
+                                              << padOrEllipsize(m->name, W_NAME) << " "
+                                              << padOrEllipsize(m->email, W_MAIL) << " "
+                                              << padOrEllipsize(m->status==BorrowerStatus::Active?"Active":"Blocked", W_STATUS) << " "
+                                              << padOrEllipsize(dateToString(m->registrationDate), W_REG) << " "
+                                              << padOrEllipsize(std::to_string(open), W_OPEN) << "\n";
                                 }
                             }
                             shown += toShow;
@@ -293,7 +362,10 @@ int main() {
                     if (rc==1) {
                         clearScreen();
                         std::cout << "--- Reports: Tagesbericht (heute) ---\n";
-                        myLib.showDailyReport();
+                        {
+                            ScopedTimer t("Tagesbericht (heute)");
+                            myLib.showDailyReport();
+                        }
                         std::cout << "\n[Enter] Zurueck";
                         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                         std::cin.get();
@@ -311,7 +383,10 @@ int main() {
                             auto day = std::mktime(&t);
                             clearScreen();
                             std::cout << "--- Reports: Tagesbericht fuer " << ds << " ---\n";
-                            myLib.showDailyReport(day);
+                            {
+                                ScopedTimer t("Tagesbericht (Datum)");
+                                myLib.showDailyReport(day);
+                            }
                         } else {
                             std::cout << "Ungueltiges Format. Bitte TT-MM-YYYY eingeben.";
                         }
@@ -321,7 +396,11 @@ int main() {
                     } else if (rc==3) {
                         std::cout << "Wie viele Eintraege anzeigen? ";
                         size_t n=20; std::cin >> n;
-                        auto list = myLib.getDueReport(n);
+                        std::vector<Loan> list;
+                        {
+                            ScopedTimer t("Faelligkeitsliste");
+                            list = myLib.getDueReport(n);
+                        }
                         clearScreen();
                         std::cout << "=== Rueckgabeliste (offene Ausleihen) ===\n";
                         auto now = std::time(nullptr);
@@ -445,10 +524,12 @@ int main() {
                     int ic = 0; std::cin >> ic;
                     if (ic == 0) { back = true; break; }
 
-                    // Import-Ordner bestimmen
-                    fs::path importDir = "./import";
-                    if (!fs::exists(importDir)) {
-                        if (fs::exists("../import")) importDir = "../import"; // Fallback
+                    // Wir suchen den "import" Ordner relativ zum aktuellen Verzeichnis
+                    fs::path importDir = "import";
+                    
+                    // Fallback für lokale Entwicklung, falls man aus cmake-build-debug startet
+                    if (!fs::exists(importDir) && fs::exists("../import")) {
+                        importDir = "../import";
                     }
 
                     fs::path filePath;
@@ -467,8 +548,11 @@ int main() {
                     }
 
                     bool ok=false;
-                    if (ic==1) ok = myLib.importBooksFromCSVFile(filePath.string());
-                    else if (ic==2) ok = myLib.importMembersFromCSVFile(filePath.string());
+                    if (ic==1) {
+                        ok = myLib.importBooksFromCSVFile(filePath.string());
+                    } else if (ic==2) {
+                        ok = myLib.importMembersFromCSVFile(filePath.string());
+                    }
 
                     if (ok) {
                         myLib.saveData();
@@ -479,6 +563,23 @@ int main() {
                     std::cout << "\n[Enter] Zurueck";
                     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                     std::cin.get();
+                }
+                break;
+            }
+            case 6: { // Einstellungen
+                bool back = false;
+                while (!back) {
+                    clearScreen();
+                    std::cout << "--- Einstellungen ---\n";
+                    std::cout << "Benchmark-Modus: " << (isBenchmarkEnabled()?"AN":"AUS") << "\n";
+                    std::cout << "[1] Benchmark umschalten\n";
+                    printMenuFooter("Zurueck");
+                    std::cout << "Auswahl: ";
+                    int ec=0; std::cin >> ec;
+                    if (ec==0) { back=true; break; }
+                    if (ec==1) {
+                        setBenchmarkEnabled(!isBenchmarkEnabled());
+                    }
                 }
                 break;
             }

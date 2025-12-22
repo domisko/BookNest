@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iostream>
 #include <limits>
+#include <chrono>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -91,4 +92,39 @@ void pauseForEnter() {
 void printMenuFooter(const std::string& zeroLabel) {
     std::cout << "\n[0] " << zeroLabel << "\n";
     std::cout << "------------------------------------\n";
+}
+
+std::string padOrEllipsize(const std::string& s, size_t width) {
+    if (width == 0) return "";
+    if (s.size() <= width) {
+        std::string out = s;
+        if (out.size() < width) out.append(width - out.size(), ' ');
+        return out;
+    }
+    if (width <= 1) return s.substr(0, width);
+    // Kürzen und am Ende mit … ersetzen (ASCII Punkt '.' dreimal)
+    if (width <= 3) return s.substr(0, width);
+    std::string out = s.substr(0, width - 3);
+    out += "...";
+    return out;
+}
+
+// -------------------- Benchmark-Utilities --------------------
+namespace {
+    bool g_benchmarkEnabled = false;
+}
+
+void setBenchmarkEnabled(bool enabled) { g_benchmarkEnabled = enabled; }
+bool isBenchmarkEnabled() { return g_benchmarkEnabled; }
+
+ScopedTimer::ScopedTimer(const std::string& label)
+    : label_(label), start_(std::chrono::steady_clock::now()) {}
+
+ScopedTimer::~ScopedTimer() {
+    if (!isBenchmarkEnabled()) return;
+    const auto end = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end - start_).count();
+    std::cout.setf(std::ios::fixed); std::cout.precision(1);
+    std::cout << "(" << label_ << " in " << ms << " ms)\n";
+    std::cout.unsetf(std::ios::floatfield);
 }
