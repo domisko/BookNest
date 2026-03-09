@@ -1,42 +1,42 @@
-# BookNest – Anwenderhandbuch
+# BookNest – User Guide
 
-Dieses Handbuch erklärt die Nutzung der Konsolen‑Anwendung „BookNest“.
+This guide explains how to use the "BookNest" console application.
 
-## Start & Anmeldung
-1. Programm starten (CLion: Target „BookNest“; oder im Terminal `./cmake-build-debug/BookNest`).
-2. Beim ersten Start existiert ein Default‑Admin: Benutzername `admin`, Passwort `admin`.
-3. Nach erfolgreichem Login wird oben der angemeldete Benutzer und die Rolle angezeigt.
+## Startup & Login
+1. Start the program (CLion: Target "BookNest"; or in the terminal `./cmake-build-debug/BookNest`).
+2. Upon the first start, a default admin exists: Username `admin`, Password `admin`.
+3. After a successful login, the logged-in user and their role are displayed at the top.
 
-## Hauptmenü
-- [1] Buch suchen: Sucht nach Titel, ISBN oder Autor(en). Ausgabe enthält Inventar‑ID zum weiteren Arbeiten.
-- [2] Buch ausleihen: Benötigt Buch‑ID und Mitglieds‑ID. Die Fälligkeit richtet sich nach `Book::maxLoanPeriodDays`.
-- [3] Buch zurückgeben: Benötigt Buch‑ID. Historie bleibt erhalten.
-- [4] Alle Bücher anzeigen: Kurzübersicht mit Verfügbarkeitsstatus.
-- [5] Alle Mitglieder anzeigen: Liste aller Borrower. (Status wird angezeigt, sofern blockiert.)
-- [6] Mitarbeiter verwalten (nur Admin): Mitarbeitende anlegen/deaktivieren/reaktivieren, Passwort zurücksetzen.
-- [7] Abmelden: Zurück zum Login.
-- [8] Testdaten generieren: Fügt einige Bücher/Mitglieder zum schnellen Testen hinzu.
-- [9] Beenden: Speichert Daten nach `library.bin` und beendet die App.
-- [10] Reports: Berichte anzeigen (Tagesbericht, Fälligkeitsliste).
+## Main Menu
+- [1] Search Book: Search by title, ISBN, or author(s). The output includes the Inventory ID for further operations.
+- [2] Borrow Book: Requires Book ID and Member ID. The due date is determined by `Book::maxLoanPeriodDays`.
+- [3] Return Book: Requires Book ID. History is preserved.
+- [4] Show All Books: Brief overview with availability status.
+- [5] Show All Members: List of all borrowers. (Status is shown if blocked.)
+- [6] Manage Employees (Admin only): Create/deactivate/reactivate employees, reset passwords.
+- [7] Logout: Return to the login screen.
+- [8] Generate Test Data: Adds some books/members for quick testing.
+- [9] Exit: Saves data to `library.bin` and exits the app.
+- [10] Reports: View reports (Daily Report, Due Report).
 
-Hinweis: Die Konsole wird vor jeder Aktion geleert (angeheftetes Menü). In einigen IDE‑Konsolen kann der Scroll‑Verlauf sichtbar bleiben; im System‑Terminal (macOS Terminal, iTerm2, Windows Terminal) ist die Darstellung sauber.
+Note: The console is cleared before each action (pinned menu). In some IDE run consoles, the scroll history may remain visible; the display is clean in system terminals (macOS Terminal, iTerm2, Windows Terminal).
 
-## Ausleihe & Rückgabe
-- Eine Ausleihe erzeugt einen `Loan`‑Eintrag mit `loanDate` und `dueDate` (Fälligkeit). Der/die aktuell angemeldete Mitarbeiter:in wird als `performedBy` vermerkt.
-- Eine Rückgabe setzt `returnDate` und aktualisiert `performedBy`.
-- Blockierte Mitglieder können nicht ausleihen (Status `Blocked`).
+## Borrowing & Returning
+- A loan creates a `Loan` entry with `loanDate` and `dueDate`. The currently logged-in employee is recorded as `performedBy`.
+- A return sets the `returnDate` and updates `performedBy`.
+- Blocked members cannot borrow books (Status `Blocked`).
 
 ## Reports
-- Tagesbericht: Zeigt alle Ausleihen und Rückgaben des gewählten Tages, inklusive Uhrzeit, beteiligten Personen, Fälligkeit und Ausführendem (`performedBy`). Außerdem werden Summen pro `MediaType` ausgegeben.
-- Fälligkeitsliste: Zeigt offene Ausleihen sortiert nach verbleibender Zeit (überfällige zuerst). Nützlich, um Mahnungen vorzubereiten.
+- Daily Report: Shows all loans and returns of the selected day, including time, involved persons, due date, and the person who performed the action (`performedBy`). Totals per `MediaType` are also provided.
+- Due Report: Shows open loans sorted by remaining time (overdue first). Useful for preparing reminders.
 
-## Mitarbeiterverwaltung
-- Nur Admins dürfen Mitarbeitende anlegen, deaktivieren/reaktivieren und Passwörter zurücksetzen.
-- Passwörter werden nicht im Klartext gespeichert, sondern über einen einfachen Demo‑Hash (nicht sicherheitsgeeignet für Produktion).
+## Employee Management
+- Only admins are allowed to create, deactivate/reactivate employees, and reset passwords.
+- Passwords are not stored in plain text but via a simple demo hash (not suitable for production security).
 
-## Dateien & Persistenz
-- Alle Daten werden binär in `library.bin` gespeichert. Beim Laden wird eine Format‑Version geprüft. In der Entwicklung kann die Datei bei Schema‑Änderungen gelöscht werden.
+## Files & Persistence
+- All data is stored binary in `library.bin`. A format version is checked upon loading. During development, the file can be deleted in case of schema changes.
 
 ## FAQ
-- „Bildschirm leert sich nicht vollständig“: Bitte im System‑Terminal starten. IDE‑Run‑Konsolen puffern häufig den Verlauf.
-- „Login schlägt fehl“: Beim ersten Start mit `admin/admin` anmelden. Danach ggf. Passwort im Admin‑Menü ändern.
+- "Screen does not clear completely": Please start in a system terminal. IDE run consoles often buffer the history.
+- "Login fails": On the first start, log in with `admin/admin`. Then change the password in the Admin menu if necessary.

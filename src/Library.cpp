@@ -67,7 +67,9 @@ Book* Library::findBookByID(const int id) {
     return nullptr;
 }
 
-    // Suche für das Menü
+    // LEGACY: Ursprüngliche Suchfunktion mit direktem cout-Output (case-sensitiv).
+    // Wird im UI nicht mehr verwendet – abgelöst durch searchBooksIDs() (case-insensitiv, kein cout).
+    // Bleibt für Abwärtskompatibilität erhalten, sollte aber bei einer Überarbeitung entfernt werden.
     std::vector<int> Library::searchBooks(const std::string& query) const {
         std::cout << "\n--- Suchergebnisse fuer '" << query << "' ---\n";
         std::vector<int> matches;

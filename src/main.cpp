@@ -37,6 +37,8 @@ int main() {
 
     // Zum Start Daten laden – bevorzugt in ./data (für Docker-Volumes),
     // dann Fallback ../data, anschließend klassisch ./ und ../
+    // data/-Verzeichnis anlegen falls es noch nicht existiert (erster Programmstart)
+    std::filesystem::create_directories("data");
     myLib.setDataFilePath("data/library.bin");
     bool loaded = myLib.loadData();
     if (!loaded) {

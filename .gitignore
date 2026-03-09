@@ -13,7 +13,7 @@ BookNest
 
 # IDE - CLion
 .idea/
-.junie/guidelines.md
+.junie/
 
 # Application data files
 *.bin
