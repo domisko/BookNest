@@ -2,15 +2,31 @@ version: "3.9"
 
 services:
   booknest:
-    build: .
-    image: booknest:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Use a versioned tag instead of 'latest' for production consistency
+    image: booknest:1.0.0
     container_name: booknest
-    working_dir: /app
-    tty: true
-    stdin_open: true
+
+    # Critical for interactive console apps
+    stdin_open: true # Corresponds to 'docker run -i'
+    tty: true        # Corresponds to 'docker run -t'
+
+    # Signal handling: Ensures Ctrl+C works correctly in your C++ app
+    # and prevents zombie processes (important for compiled binaries)
+    init: true
+    stop_signal: SIGINT
+
     volumes:
       - ./data:/app/data
       - ./import:/app/import
-    # Environment variables can be added here if needed later
-    # environment:
-    #   - TZ=Europe/Berlin
+
+    # Resource limits: Prevents the app from consuming all host resources
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+    # Since it's a CLI tool, don't restart automatically when the user exits
+    restart: "no"

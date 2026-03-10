@@ -116,24 +116,31 @@ docker build -t booknest:latest .
 ```
 
 ### Start via Docker Compose (Recommended)
-```
+For the best interactive experience (clean terminal), use:
+```bash
+# Create folders and run the app
 mkdir -p data import
+docker compose run --rm booknest
+```
+The `--rm` flag ensures that the container is removed after you exit, keeping your system clean.
+
+If you prefer the standard way:
+```bash
 docker compose up --build
 ```
-This starts the app interactively. Volumes:
+Note: `docker compose up` might prefix lines with `booknest-1 |`. Use `run` for a native feel.
+
+Volumes:
 - `./data` → `/app/data` (contains `library.bin`)
 - `./import` → `/app/import` (place `books.csv`/`members.csv` here)
 
 Log in as admin in the program (`admin/admin`) → Main Menu `[5] Import (Admin)`.
 
-### Direct Start without Compose
-```
-mkdir -p data import
-docker run --rm -it \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/import:/app/import" \
-  --name booknest booknest:latest
-```
+### Resetting the Application (Delete Data)
+To reset the database (delete all imported books and members):
+1. Stop any running container.
+2. Delete the binary file: `rm data/library.bin`
+3. Restart the app: `docker compose run --rm booknest`
 
 ## Benchmark Mode
 - Activation: Main Menu → `[6] Settings` → "Toggle Benchmark". Status is displayed (ON/OFF).

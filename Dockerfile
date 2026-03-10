@@ -29,10 +29,12 @@ RUN apt-get update \
     libstdc++6 \
  && rm -rf /var/lib/apt/lists/*
 
+RUN groupadd -r booknest && useradd -r -g booknest booknest
+
 WORKDIR /app
 
 # Erstelle die notwendigen Verzeichnisse
-RUN mkdir -p /app/data /app/import
+RUN mkdir -p /app/data /app/import && chown -R booknest:booknest /app
 
 # Kopiere die ausführbare Datei aus dem Builder
 COPY --from=builder /src/build/BookNest /app/BookNest
@@ -40,5 +42,7 @@ COPY --from=builder /src/build/BookNest /app/BookNest
 # WICHTIG: Kopiere den INHALT des lokalen import-Ordners in den /app/import Ordner im Container
 COPY import/ /app/import/
 
-# Default command: interactive console app
+USER booknest
+
+# Default command
 ENTRYPOINT ["/app/BookNest"]

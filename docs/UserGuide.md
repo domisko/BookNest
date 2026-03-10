@@ -3,7 +3,9 @@
 This guide explains how to use the "BookNest" console application.
 
 ## Startup & Login
-1. Start the program (CLion: Target "BookNest"; or in the terminal `./cmake-build-debug/BookNest`).
+1. Start the program:
+   - **Local:** (CLion: Target "BookNest"; or in the terminal `./cmake-build-debug/BookNest`).
+   - **Docker:** (Recommended for testing): `docker compose run --rm booknest`.
 2. Upon the first start, a default admin exists: Username `admin`, Password `admin`.
 3. After a successful login, the logged-in user and their role are displayed at the top.
 
