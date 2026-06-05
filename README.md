@@ -1,6 +1,22 @@
 # BookNest – Console Library Management System (C++17)
 
+[![CI](https://github.com/domisko/BookNest/actions/workflows/ci.yml/badge.svg)](https://github.com/domisko/BookNest/actions/workflows/ci.yml)
+[![Release](https://github.com/domisko/BookNest/actions/workflows/release.yml/badge.svg)](https://github.com/domisko/BookNest/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license--note)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus)
+
 BookNest is a text-based library management system that combines learning objectives from OOP, binary persistence, dates/deadlines, search, reporting, CSV import, and simple role management (Admin/Staff).
+
+## Demo
+
+> Run it yourself in seconds — no build required:
+> ```bash
+> docker run -it --rm ghcr.io/domisko/booknest:latest
+> ```
+> Default login: `admin` / `admin`
+
+<!-- demo.gif: record a short terminal session and drop it here -->
+<!-- ![BookNest demo](docs/demo.gif) -->
 
 ## Features
 - Media Model: `Book` with author list, publisher, edition, location, genre, price, `MediaType`, `maxLoanPeriodDays`, `createdAt`, `createdBy/lastModifiedBy`.

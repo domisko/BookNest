@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-linux:
+    name: Build Linux binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y cmake g++ ninja-build
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --target BookNest
+
+      - name: Run tests
+        run: |
+          cmake --build build --target unit_tests
+          ./build/unit_tests --reporter compact
+
+      - name: Package
+        run: |
+          mkdir -p dist/import
+          cp build/BookNest dist/
+          cp import/books.csv dist/import/ 2>/dev/null || true
+          cp import/members.csv dist/import/ 2>/dev/null || true
+          tar -czf booknest-linux-x86_64.tar.gz -C dist .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: booknest-linux-x86_64
+          path: booknest-linux-x86_64.tar.gz
+
+  publish-docker:
+    name: Push Docker image to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-linux, publish-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: booknest-linux-x86_64
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: booknest-linux-x86_64.tar.gz
+          generate_release_notes: true
+          body: |
+            ## BookNest ${{ github.ref_name }}
+
+            ### Install (Linux)
+            ```bash
+            tar -xzf booknest-linux-x86_64.tar.gz
+            ./BookNest
+            ```
+
+            ### Docker
+            ```bash
+            docker run -it --rm \
+              -v $(pwd)/data:/app/data \
+              -v $(pwd)/import:/app/import \
+              ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ```
+
+            Default login: `admin` / `admin`

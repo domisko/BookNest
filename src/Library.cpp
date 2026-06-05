@@ -71,7 +71,7 @@ Book* Library::findBookByID(const int id) {
     // Wird im UI nicht mehr verwendet – abgelöst durch searchBooksIDs() (case-insensitiv, kein cout).
     // Bleibt für Abwärtskompatibilität erhalten, sollte aber bei einer Überarbeitung entfernt werden.
     std::vector<int> Library::searchBooks(const std::string& query) const {
-        std::cout << "\n--- Suchergebnisse fuer '" << query << "' ---\n";
+        std::cout << "\n--- Search results for '" << query << "' ---\n";
         std::vector<int> matches;
 
         for (const auto& book : books) {
@@ -95,12 +95,12 @@ Book* Library::findBookByID(const int id) {
                 if (!book.authors.empty()) {
                     std::cout << " (" << oss.str() << ")";
                 }
-                std::cout << " - " << (book.isAvailable ? "Verfuegbar" : "AUSGELIEHEN") << "\n";
+                std::cout << " - " << (book.isAvailable ? "Available" : "ON LOAN") << "\n";
                 matches.push_back(book.inventoryID);
             }
         }
 
-        if (matches.empty()) std::cout << "Keine Buecher gefunden.\n";
+        if (matches.empty()) std::cout << "No books found.\n";
         return matches;
     }
 
@@ -177,16 +177,16 @@ Book* Library::findBookByID(const int id) {
 
     // Hilfsmethode: Alle Bücher anzeigen
     void Library::printAllBooks() const {
-        std::cout << "\n--- Buchbestand (" << books.size() << ") ---\n";
+        std::cout << "\n--- Book inventory (" << books.size() << ") ---\n";
         for (const auto& book : books) {
             std::cout << "[ID: " << book.inventoryID << "] " << book.title
-                      << " (" << (book.isAvailable ? "Verfuegbar" : "Verliehen") << ")\n";
+                      << " (" << (book.isAvailable ? "Available" : "On loan") << ")\n";
         }
     }
 
     // Hilfsmethode: Alle Mitglieder anzeigen (fürs Ausleihen)
     void Library::printAllMembers() const {
-        std::cout << "\n--- Mitgliederliste (" << borrowers.size() << ") ---\n";
+        std::cout << "\n--- Member list (" << borrowers.size() << ") ---\n";
         for (const auto& m : borrowers) {
             std::cout << "[ID: " << m.memberID << "] " << m.name << "\n";
         }
@@ -234,20 +234,20 @@ Book* Library::findBookByID(const int id) {
 
         // 1. Validierung
         if (!book) {
-            std::cout << "Fehler: Buch mit ID " << bookID << " nicht gefunden.\n";
+            std::cout << "Error: Book with ID " << bookID << " not found.\n";
             return false;
         }
         if (!borrower) {
-            std::cout << "Fehler: Mitglied mit ID " << memberID << " nicht gefunden.\n";
+            std::cout << "Error: Member with ID " << memberID << " not found.\n";
             return false;
         }
         // Borrower-Status prüfen: nur Active darf ausleihen
         if (borrower->status != BorrowerStatus::Active) {
-            std::cout << "Fehler: Mitglied '" << borrower->name << "' ist gesperrt (Status: Blocked).\n";
+            std::cout << "Error: Member '" << borrower->name << "' is blocked (Status: Blocked).\n";
             return false;
         }
         if (!book->isAvailable) {
-            std::cout << "Fehler: Buch '" << book->title << "' ist bereits verliehen!\n";
+            std::cout << "Error: Book '" << book->title << "' is already on loan!\n";
             return false;
         }
 
@@ -271,8 +271,8 @@ Book* Library::findBookByID(const int id) {
 
         // Info-Ausgabe mit Datum
         Loan& newLoan = loans.back();
-        std::cout << "Erfolg: '" << book->title << "' wurde an " << borrower->name
-                  << " verliehen. Faellig am: " << dateToString(newLoan.dueDate) << "\n";
+        std::cout << "Success: '" << book->title << "' lent to " << borrower->name
+                  << ". Due: " << dateToString(newLoan.dueDate) << "\n";
             // Autosave nach erfolgreichem Ausleihen
             saveData();
             return true;
@@ -307,14 +307,12 @@ Book* Library::findBookByID(const int id) {
                 if (currentUserID != -1) {
                     for (const auto& e : employees) if (e.employeeID == currentUserID) { book->lastModifiedBy = e.username; break; }
                 }
-                std::cout << "Erfolg: Buch '" << book->title << "' wurde zurueckgegeben.\n";
-                // Verspätung prüfen und Hinweis ausgeben
+                std::cout << "Success: Book '" << book->title << "' returned.\n";
                 if (it->returnDate > it->dueDate) {
                     long long diff = static_cast<long long>(it->returnDate) - static_cast<long long>(it->dueDate);
-                    // Auf volle Tage aufrunden: jede angefangene 24h zählt als 1 Tag
                     long long daysLate = (diff + (24LL*60*60 - 1)) / (24LL*60*60);
-                    if (daysLate < 1) daysLate = 1; // defensiv
-                    std::cout << "Hinweis: Rueckgabe VERSPAETET um " << daysLate << " Tag(e). Faellig war: "
+                    if (daysLate < 1) daysLate = 1;
+                    std::cout << "Notice: Return OVERDUE by " << daysLate << " day(s). Was due: "
                               << dateToString(it->dueDate) << "\n";
                 }
             }
@@ -322,7 +320,7 @@ Book* Library::findBookByID(const int id) {
             saveData();
             return true;
         }
-        std::cout << "Fehler: Dieses Buch ist aktuell gar nicht ausgeliehen.\n";
+        std::cout << "Error: This book is not currently on loan.\n";
         return false;
     }
 
@@ -351,8 +349,8 @@ Book* Library::findBookByID(const int id) {
         auto byRet = [](const Loan* a, const Loan* b){ return a->returnDate < b->returnDate; };
         std::sort(returned.begin(), returned.end(), byRet);
 
-        std::cout << "\n=== Tagesbericht (" << dateToString(day) << ") ===\n";
-        std::cout << "Ausgeliehen: " << borrowed.size() << "\n";
+        std::cout << "\n=== Daily Report (" << dateToString(day) << ") ===\n";
+        std::cout << "Borrowed: " << borrowed.size() << "\n";
         for (auto* l : borrowed) {
             const Book* b = nullptr; const Borrower* m = nullptr;
             for (const auto& bk : books) if (bk.inventoryID == l->bookInventoryID) { b = &bk; break; }
@@ -360,10 +358,10 @@ Book* Library::findBookByID(const int id) {
             std::cout << "  [" << std::put_time(std::localtime(&l->loanDate), "%H:%M") << "] ";
             std::cout << (b? b->title : "Buch#"+std::to_string(l->bookInventoryID))
                       << " -> " << (m? m->name : ("Mitglied#"+std::to_string(l->borrowerID)))
-                      << " | durch: " << (l->performedBy.empty()?"n/a":l->performedBy)
-                      << " | faellig: " << dateToString(l->dueDate) << "\n";
+                      << " | by: " << (l->performedBy.empty()?"n/a":l->performedBy)
+                      << " | due: " << dateToString(l->dueDate) << "\n";
         }
-        std::cout << "Zurueckgegeben: " << returned.size() << "\n";
+        std::cout << "Returned: " << returned.size() << "\n";
         for (auto* l : returned) {
             const Book* b = nullptr; const Borrower* m = nullptr;
             for (const auto& bk : books) if (bk.inventoryID == l->bookInventoryID) { b = &bk; break; }
@@ -376,7 +374,7 @@ Book* Library::findBookByID(const int id) {
                 long long diff = static_cast<long long>(l->returnDate) - static_cast<long long>(l->dueDate);
                 long long daysLate = (diff + (24LL*60*60 - 1)) / (24LL*60*60);
                 if (daysLate < 1) daysLate = 1;
-                std::cout << " | VERSPAETET: " << daysLate << " Tag(e)";
+                std::cout << " | OVERDUE: " << daysLate << " day(s)";
             }
             std::cout << "\n";
         }
@@ -401,14 +399,14 @@ Book* Library::findBookByID(const int id) {
             for (const auto& bk : books) if (bk.inventoryID == l->bookInventoryID) { returnCounts[bk.mediaType]++; break; }
         }
 
-        std::cout << "\n--- Summen nach MediaType ---\n";
-        std::cout << "Ausgeliehen gesamt: " << borrowed.size() << " | Zurueckgegeben gesamt: " << returned.size() << "\n";
+        std::cout << "\n--- Totals by MediaType ---\n";
+        std::cout << "Total borrowed: " << borrowed.size() << " | Total returned: " << returned.size() << "\n";
         for (int mt = 0; mt <= static_cast<int>(MediaType::Other); ++mt) {
             MediaType key = static_cast<MediaType>(mt);
             size_t bc = borrowCounts[key];
             size_t rc = returnCounts[key];
             if (bc == 0 && rc == 0) continue;
-            std::cout << "  " << mediaLabel(key) << ": ausgeliehen " << bc << ", zurueckgegeben " << rc << "\n";
+            std::cout << "  " << mediaLabel(key) << ": borrowed " << bc << ", returned " << rc << "\n";
         }
     }
 
@@ -430,7 +428,7 @@ Book* Library::findBookByID(const int id) {
         auto t0 = std::chrono::steady_clock::now();
         std::ofstream out(dataFilePath, std::ios::binary);
         if (!out) {
-            std::cerr << "Fehler: Konnte Datei nicht zum Speichern oeffnen!\n";
+            std::cerr << "Error: Could not open file for saving!\n";
             return false;
         }
 
@@ -519,12 +517,12 @@ Book* Library::findBookByID(const int id) {
         out.write(reinterpret_cast<char *>(&nextLoanID), sizeof(nextLoanID));
         out.write(reinterpret_cast<char *>(&nextEmployeeID), sizeof(nextEmployeeID));
 
-        std::cout << "Daten erfolgreich in '" << dataFilePath << "' gespeichert.\n";
+        std::cout << "Data saved to '" << dataFilePath << "'.\n";
         if (isBenchmarkEnabled()) {
             auto t1 = std::chrono::steady_clock::now();
             double ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t1 - t0).count();
             std::cout.setf(std::ios::fixed); std::cout.precision(1);
-            std::cout << "(Speichern in " << ms << " ms)\n";
+            std::cout << "(Saved in " << ms << " ms)\n";
             std::cout.unsetf(std::ios::floatfield);
         }
         out.close();
@@ -536,7 +534,7 @@ Book* Library::findBookByID(const int id) {
         auto t0 = std::chrono::steady_clock::now();
         std::ifstream in(dataFilePath, std::ios::binary);
         if (!in) {
-            std::cout << "Keine gespeicherten Daten gefunden in '" << dataFilePath << "'. Starte leer.\n";
+            std::cout << "No saved data found in '" << dataFilePath << "'. Starting fresh.\n";
             return false;
         }
 
@@ -549,13 +547,13 @@ Book* Library::findBookByID(const int id) {
         char magic[4];
         in.read(magic, sizeof(magic));
         if (!in || magic[0] != 'B' || magic[1] != 'N' || magic[2] != 'E' || magic[3] != 'S') {
-            std::cerr << "Fehler: Ungueltiges Datenformat (Magic).\n";
+            std::cerr << "Error: Invalid data format (Magic).\n";
             return false;
         }
         uint32_t version = 0;
         in.read(reinterpret_cast<char*>(&version), sizeof(version));
         if (!in || version != 5) {
-            std::cerr << "Fehler: Nicht unterstuetzte Version: " << version << "\n";
+            std::cerr << "Error: Unsupported version: " << version << "\n";
             return false;
         }
 
@@ -654,13 +652,13 @@ Book* Library::findBookByID(const int id) {
         in.read(reinterpret_cast<char *>(&nextLoanID), sizeof(nextLoanID));
         in.read(reinterpret_cast<char *>(&nextEmployeeID), sizeof(nextEmployeeID));
 
-        std::cout << "Daten erfolgreich aus '" << dataFilePath << "' geladen (" << books.size() << " Buecher).\n";
+        std::cout << "Data loaded from '" << dataFilePath << "' (" << books.size() << " books).\n";
         in.close();
         if (isBenchmarkEnabled()) {
             auto t1 = std::chrono::steady_clock::now();
             double ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t1 - t0).count();
             std::cout.setf(std::ios::fixed); std::cout.precision(1);
-            std::cout << "(Laden in " << ms << " ms)\n";
+            std::cout << "(Loaded in " << ms << " ms)\n";
             std::cout.unsetf(std::ios::floatfield);
         }
         return true;
@@ -675,11 +673,11 @@ int Library::addEmployee(const std::string& username,
     // Rechte: nur Admin darf
     const Employee* current = getCurrentUser();
     if (!current || current->role != Role::Admin) {
-        std::cout << "Fehler: Nur Admins duerfen Mitarbeiter anlegen.\n";
+        std::cout << "Error: Only admins can add staff.\n";
         return -1;
     }
     if (findEmployeeByUsername(employees, username)) {
-        std::cout << "Fehler: Benutzername bereits vergeben.\n";
+        std::cout << "Error: Username already taken.\n";
         return -1;
     }
     int id = nextEmployeeID++;
@@ -691,7 +689,7 @@ int Library::addEmployee(const std::string& username,
 
 bool Library::deactivateEmployee(int employeeID) {
     const Employee* current = getCurrentUser();
-    if (!current || current->role != Role::Admin) { std::cout << "Fehler: Admin-Recht erforderlich.\n"; return false; }
+    if (!current || current->role != Role::Admin) { std::cout << "Error: Admin rights required.\n"; return false; }
     for (auto& e : employees) {
         if (e.employeeID == employeeID) { e.isActive = false; saveData(); return true; }
     }
@@ -700,7 +698,7 @@ bool Library::deactivateEmployee(int employeeID) {
 
 bool Library::reactivateEmployee(int employeeID) {
     const Employee* current = getCurrentUser();
-    if (!current || current->role != Role::Admin) { std::cout << "Fehler: Admin-Recht erforderlich.\n"; return false; }
+    if (!current || current->role != Role::Admin) { std::cout << "Error: Admin rights required.\n"; return false; }
     for (auto& e : employees) {
         if (e.employeeID == employeeID) { e.isActive = true; saveData(); return true; }
     }
@@ -709,7 +707,7 @@ bool Library::reactivateEmployee(int employeeID) {
 
 bool Library::resetEmployeePassword(int employeeID, const std::string& rawPassword) {
     const Employee* current = getCurrentUser();
-    if (!current || current->role != Role::Admin) { std::cout << "Fehler: Admin-Recht erforderlich.\n"; return false; }
+    if (!current || current->role != Role::Admin) { std::cout << "Error: Admin rights required.\n"; return false; }
     for (auto& e : employees) {
         if (e.employeeID == employeeID) { e.passwordHash = simpleHash(rawPassword); saveData(); return true; }
     }
@@ -742,7 +740,7 @@ const Employee* Library::getCurrentUser() const {
 
     // --- Testdaten Generator ---
     void Library::generateDummyData() {
-    std::cout << "Generiere Testdaten...\n";
+    std::cout << "Generating test data...\n";
     // 5 Bücher (mit Minimalfeldern + Defaults)
     addBook("978-3-1", "Der C++ Programmierer", {"Ulrich Breymann"}, "Hanser",
             "GEN", "", "", 0.0, MediaType::Book);
@@ -760,7 +758,7 @@ const Employee* Library::getCurrentUser() const {
     addMember("Erika Musterfrau", "erika@test.de", "Beispielstrasse 2");
     addMember("John Doe", "john@doe.com", "Unknown Road 42");
 
-    std::cout << "Daten generiert.\n";
+    std::cout << "Data generated.\n";
 }
 
 // -------------------- CSV-Import --------------------
@@ -826,9 +824,9 @@ bool Library::importBooksFromCSV(const std::string& directoryPath) {
 
 bool Library::importBooksFromCSVFile(const std::string& filePath) {
     std::ifstream in(filePath);
-    if (!in) { std::cout << "Import: Datei '" << filePath << "' nicht gefunden.\n"; return false; }
+    if (!in) { std::cout << "Import: File '" << filePath << "' not found.\n"; return false; }
 
-    std::string header; if (!std::getline(in, header)) { std::cout << "Import: Leere books.csv.\n"; return false; }
+    std::string header; if (!std::getline(in, header)) { std::cout << "Import: Empty books.csv.\n"; return false; }
     stripBOM(header);
     char delim = detectDelimiter(header);
     // Erwartete Spalten (mindestens):
@@ -845,7 +843,7 @@ bool Library::importBooksFromCSVFile(const std::string& filePath) {
     int ci_title = col("title");
     if (ci_isbn==-1 || ci_title==-1) {
         std::ostringstream oss;
-        oss << "Import: Header muss mindestens ISBN und Title enthalten. Gefunden: ";
+        oss << "Import: Header must contain at least ISBN and Title. Found: ";
         for (size_t i=0;i<h.size();++i){ if (i) oss << ", "; oss << h[i]; }
         oss << "\n";
         std::cout << oss.str();
@@ -885,7 +883,7 @@ bool Library::importBooksFromCSVFile(const std::string& filePath) {
         ++imported;
     }
 
-    std::cout << "Import Buecher: " << imported << " importiert, " << skipped << " uebersprungen.\n";
+    std::cout << "Import books: " << imported << " imported, " << skipped << " skipped.\n";
     return imported>0;
 }
 
@@ -898,9 +896,9 @@ bool Library::importMembersFromCSV(const std::string& directoryPath) {
 
 bool Library::importMembersFromCSVFile(const std::string& filePath) {
     std::ifstream in(filePath);
-    if (!in) { std::cout << "Import: Datei '" << filePath << "' nicht gefunden.\n"; return false; }
+    if (!in) { std::cout << "Import: File '" << filePath << "' not found.\n"; return false; }
 
-    std::string header; if (!std::getline(in, header)) { std::cout << "Import: Leere members.csv.\n"; return false; }
+    std::string header; if (!std::getline(in, header)) { std::cout << "Import: Empty members.csv.\n"; return false; }
     stripBOM(header);
     char delim = detectDelimiter(header);
     // Erwartete Spalten (mindestens): Name;Email;Address
@@ -919,7 +917,7 @@ bool Library::importMembersFromCSVFile(const std::string& filePath) {
     int ci_status = col("status");
     if (ci_name==-1 || ci_email==-1 || ci_address==-1) {
         std::ostringstream oss;
-        oss << "Import: Header members.csv unvollstaendig. Gefunden: ";
+        oss << "Import: members.csv header incomplete. Found: ";
         for (size_t i=0;i<h.size();++i){ if (i) oss << ", "; oss << h[i]; }
         oss << "\n";
         std::cout << oss.str();
@@ -974,6 +972,6 @@ bool Library::importMembersFromCSVFile(const std::string& filePath) {
         }
         ++imported;
     }
-    std::cout << "Import Mitglieder: " << imported << " importiert, " << skipped << " uebersprungen.\n";
+    std::cout << "Import members: " << imported << " imported, " << skipped << " skipped.\n";
     return imported>0;
 }

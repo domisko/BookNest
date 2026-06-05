@@ -84,7 +84,7 @@ std::string simpleHash(const std::string& input) {
 
 // Einfache Enter-Pause (zentral genutzt in Untermenüs, um doppelte Pausen zu vermeiden)
 void pauseForEnter() {
-    std::cout << "\nDruecken Sie Enter um fortzufahren...";
+    std::cout << "\nPress Enter to continue...";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     std::cin.get();
 }
