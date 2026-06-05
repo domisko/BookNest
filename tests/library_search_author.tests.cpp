@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include "Library.h"
 
 TEST_CASE("searchBooks matches authors list (including non-primary)", "[search][author]") {
