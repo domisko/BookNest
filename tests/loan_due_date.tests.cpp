@@ -23,6 +23,7 @@ TEST_CASE("Due date respects Book::maxLoanPeriodDays", "[loan][due]") {
 
     // Leihe 1
     REQUIRE(lib.borrowBook(id1, member));
+    b1 = lib.findBookByID(id1); // re-fetch: vector may have reallocated during addBook/addMember
     REQUIRE_FALSE(b1->isAvailable);
     const auto& loans1 = lib.getLoans();
     REQUIRE_FALSE(loans1.empty());
