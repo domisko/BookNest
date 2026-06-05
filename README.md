@@ -15,8 +15,7 @@ BookNest is a text-based library management system that combines learning object
 > ```
 > Default login: `admin` / `admin`
 
-<!-- demo.gif: record a short terminal session and drop it here -->
-<!-- ![BookNest demo](docs/demo.gif) -->
+![BookNest demo](docs/demo.gif)
 
 ## Features
 - Media Model: `Book` with author list, publisher, edition, location, genre, price, `MediaType`, `maxLoanPeriodDays`, `createdAt`, `createdBy/lastModifiedBy`.
